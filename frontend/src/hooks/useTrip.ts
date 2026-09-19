@@ -37,6 +37,35 @@ export function useTrip() {
   const [isFormSubmitting, setIsFormSubmitting] = useState<boolean>(false);
   const [pendingConstraints, setPendingConstraints] = useState<TripConstraints | null>(null);
 
+  // Initial fetch of persisted trip from localStorage or backend if available
+  useEffect(() => {
+    const savedTripId = localStorage.getItem('travelpilot_current_trip_id');
+    if (savedTripId) {
+      api.getTrip(savedTripId)
+        .then((loadedTrip) => {
+          if (loadedTrip && loadedTrip.trip_id) {
+            setTrip(loadedTrip);
+            if (loadedTrip.itinerary?.days && loadedTrip.itinerary.days.length > 0) {
+              const savedScreen = localStorage.getItem('travelpilot_current_screen') as ScreenType;
+              if (savedScreen && ['dashboard', 'assistant', 'disruption', 'before_after'].includes(savedScreen)) {
+                setCurrentScreen(savedScreen);
+              } else {
+                setCurrentScreen('dashboard');
+              }
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
+  // Save current screen for smooth reload
+  useEffect(() => {
+    if (currentScreen !== 'loading') {
+      localStorage.setItem('travelpilot_current_screen', currentScreen);
+    }
+  }, [currentScreen]);
+
   // Toggle currency between INR and EUR
   const toggleCurrency = useCallback(() => {
     setCurrency((prev) => (prev === 'INR' ? 'EUR' : 'INR'));
@@ -49,6 +78,7 @@ export function useTrip() {
     try {
       const res = await api.createTrip(constraints);
       setTrip(res.trip);
+      localStorage.setItem('travelpilot_current_trip_id', res.trip.trip_id);
       setCurrentScreen('loading');
     } catch {
       setCurrentScreen('loading');
@@ -63,21 +93,29 @@ export function useTrip() {
       await api.generateItinerary(trip.trip_id, 'initial_generation');
       const latestTrip = await api.getTrip(trip.trip_id);
       setTrip(latestTrip);
+      localStorage.setItem('travelpilot_current_trip_id', latestTrip.trip_id);
     } catch {
       // Fallback to active trip
     }
     setCurrentScreen('dashboard');
   };
 
-  // Trigger simulated Louvre disruption
-  const triggerLouvreDisruption = async (activityId: string = 'act_002_louvre') => {
+  // Trigger simulated disruption on current Day 1 activity
+  const triggerLouvreDisruption = async (activityId?: string) => {
     setIsDisrupted(true);
+    const targetAct =
+      trip.itinerary?.days?.[0]?.activities?.find((a) => a.id === activityId) ||
+      trip.itinerary?.days?.[0]?.activities?.[0];
+
+    const targetId = activityId || targetAct?.id || 'act_001';
+    const targetName = targetAct?.name || 'Scheduled Activity';
+
     try {
       const result = await api.reportDisruption(trip.trip_id, {
-        activity_id: activityId,
+        activity_id: targetId,
         type: 'strike',
-        message: 'Museum closed due to sudden labor action.',
-        simulate: false,
+        message: `${targetName} closed due to unexpected temporary closure.`,
+        simulate: true,
       });
 
       setAlternatives(result.alternatives);
@@ -92,7 +130,7 @@ export function useTrip() {
       const alertMessage: AgentMessage = {
         id: `msg_${Date.now()}`,
         sender: 'assistant',
-        text: `⚠️ Urgent Disruption Detected: Louvre Museum timed entry (10:30 CET) is unavailable due to an unannounced labor action. I evaluated 3 candidate alternatives and calculated a 98% match with Musée d'Orsay with zero schedule penalty and ₹300 in savings.`,
+        text: `⚠️ Urgent Disruption Detected: ${targetName} timed entry is unavailable due to an unexpected closure. I evaluated candidate alternatives and calculated a top match with ${result.alternatives[0]?.name || 'a verified replacement'}.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setChatMessages((prev) => [...prev, alertMessage]);
@@ -105,9 +143,15 @@ export function useTrip() {
   // Apply chosen alternative
   const handleApplyAlternative = async (alternative: Alternative) => {
     try {
+      const targetActId =
+        alternative.activity_id ||
+        trip.itinerary?.days?.[0]?.activities?.find((a) => a.status === 'disrupted')?.id ||
+        trip.itinerary?.days?.[0]?.activities?.[0]?.id ||
+        'act_001';
+
       const result = await api.applyAlternative(
         trip.trip_id,
-        alternative.activity_id,
+        targetActId,
         alternative.id
       );
       setChanges(result.changes);
@@ -121,7 +165,7 @@ export function useTrip() {
       const confirmMessage: AgentMessage = {
         id: `msg_${Date.now()}`,
         sender: 'assistant',
-        text: `✅ Replan Applied: Selected ${alternative.name}. Day 1 schedule re-aligned: Orsay (10:45–13:00) and Tuileries Lunch moved +5m to 13:20. All transit links and budget confirmed.`,
+        text: `✅ Replan Applied: Selected ${alternative.name}. Day 1 schedule re-aligned with replacement. All transit links and budget confirmed.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setChatMessages((prev) => [...prev, confirmMessage]);
@@ -131,9 +175,14 @@ export function useTrip() {
     }
   };
 
-  // Commit changes to persistent trip
-  const handleCommitReplanning = () => {
+  // Commit changes to persistent trip and refresh source of truth
+  const handleCommitReplanning = async () => {
     setIsDisrupted(false);
+    try {
+      const latestTrip = await api.getTrip(trip.trip_id);
+      setTrip(latestTrip);
+      localStorage.setItem('travelpilot_current_trip_id', latestTrip.trip_id);
+    } catch {}
     setCurrentScreen('dashboard');
   };
 

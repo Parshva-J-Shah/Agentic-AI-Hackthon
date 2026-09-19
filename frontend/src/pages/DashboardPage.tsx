@@ -43,6 +43,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     return `₹${cost.toLocaleString()}`;
   };
 
+  const disruptedAct = trip.itinerary?.days
+    ?.flatMap((d) => d.activities)
+    ?.find((a) => a.status === 'disrupted') || trip.itinerary?.days?.[0]?.activities?.[0];
+  const disruptedName = disruptedAct?.name || 'Scheduled Activity';
+
+  const hotelName = trip.accommodation?.name || `${trip.destination.split(',')[0]} Signature Hotel`;
+  const hotelAddr = trip.accommodation?.address || `Central District, ${trip.destination}`;
+  const transitPass = `${trip.destination.split(',')[0]} Transit Card`;
+  const transitNote = `Suggested for convenient travel in ${trip.destination.split(',')[0]}`;
+  const isTropical = trip.destination.toLowerCase().includes('mumbai') || trip.destination.toLowerCase().includes('india');
+  const weatherInfo = isTropical ? '28°C · Tropical / Warm' : '20°C · Mild / Clear';
+  const weatherNote = isTropical ? 'Pleasant for coastal walks · Light attire recommended' : 'Pleasant for walking · Light layer recommended';
+
   return (
     <div className="w-full max-w-[1320px] mx-auto px-margin-mobile md:px-margin py-8 space-y-8">
       {/* Top Trip Banner Strip */}
@@ -101,16 +114,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             </div>
             <div>
               <h3 className="font-headline-sm text-base font-bold text-on-surface">
-                Louvre Museum disruption detected
+                {disruptedName} disruption detected
               </h3>
               <p className="font-body-sm text-xs sm:text-sm text-on-surface-variant mt-0.5">
-                Unannounced venue closure on Day 1. TravelPilot evaluated alternatives that preserve your lunch &amp; cruise schedule.
+                Unannounced schedule change on Day 1. TravelPilot evaluated alternatives that preserve your timing &amp; transit schedule.
               </p>
             </div>
           </div>
           <button
             type="button"
-            onClick={() => onViewAlternatives('act_002_louvre')}
+            onClick={() => onViewAlternatives(disruptedAct?.id || 'act_001')}
             className="px-space-md py-2 rounded-full bg-primary text-on-primary font-label-md text-xs sm:text-sm font-semibold hover:bg-neutral-800 transition-all shrink-0 self-start sm:self-auto cursor-pointer"
           >
             Review Recommended Alternative
@@ -166,8 +179,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   hotel
                 </span>
                 <div>
-                  <div className="font-semibold text-on-surface">Hôtel Saint-Germain</div>
-                  <div className="text-on-surface-variant">Saint-Germain-des-Prés · Base location</div>
+                  <div className="font-semibold text-on-surface">{hotelName}</div>
+                  <div className="text-on-surface-variant">{hotelAddr}</div>
                 </div>
               </div>
 
@@ -176,8 +189,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   confirmation_number
                 </span>
                 <div>
-                  <div className="font-semibold text-on-surface">Paris Visite Metro Pass</div>
-                  <div className="text-on-surface-variant">Zones 1–3 · Suggested for easy transit</div>
+                  <div className="font-semibold text-on-surface">{transitPass}</div>
+                  <div className="text-on-surface-variant">{transitNote}</div>
                 </div>
               </div>
 
@@ -186,8 +199,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   wb_sunny
                 </span>
                 <div>
-                  <div className="font-semibold text-on-surface">18°C · Mild · Demo</div>
-                  <div className="text-on-surface-variant">Pleasant for walking · Light sweater recommended</div>
+                  <div className="font-semibold text-on-surface">{weatherInfo}</div>
+                  <div className="text-on-surface-variant">{weatherNote}</div>
                 </div>
               </div>
             </div>

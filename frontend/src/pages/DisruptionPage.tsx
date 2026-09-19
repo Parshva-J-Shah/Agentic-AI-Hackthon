@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alternative, Currency } from '../types/trip';
+import { Alternative, Currency, Trip } from '../types/trip';
 
 interface DisruptionPageProps {
   alternatives: Alternative[];
@@ -7,6 +7,7 @@ interface DisruptionPageProps {
   onPreviewAlternative: (alt: Alternative) => void;
   onApplyAlternative: (alt: Alternative) => void;
   onBackToDashboard: () => void;
+  trip?: Trip;
 }
 
 export const DisruptionPage: React.FC<DisruptionPageProps> = ({
@@ -15,8 +16,22 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
   onPreviewAlternative,
   onApplyAlternative,
   onBackToDashboard,
+  trip,
 }) => {
   const [showOtherOptions, setShowOtherOptions] = useState(true);
+
+  const destination = trip?.destination || 'Curated Destination';
+  const cityName = destination.split(',')[0].trim();
+  const disruptedAct = trip?.itinerary?.days
+    ?.flatMap((d) => d.activities)
+    ?.find((a) => a.status === 'disrupted') || trip?.itinerary?.days?.[0]?.activities?.[0];
+  const disruptedName = disruptedAct?.name || 'Scheduled Activity';
+  const disruptedSlot = disruptedAct ? `${disruptedAct.start_time} – ${disruptedAct.end_time} Slot` : 'Morning Slot';
+  const disruptedLoc = disruptedAct?.location || destination;
+  const disruptedCost = disruptedAct?.estimated_cost || 1200;
+
+  const day1Acts = trip?.itinerary?.days?.[0]?.activities || [];
+  const nextActs = day1Acts.filter((a) => a.id !== disruptedAct?.id).slice(0, 2);
 
   const formatCost = (val: number) => {
     if (currency === 'EUR') {
@@ -25,35 +40,38 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
     return `₹${val.toLocaleString()}`;
   };
 
-  const selectionReasons: string[] = [
-    'Fits your art & history interests',
-    'Fits the 10:45 – 13:00 available time',
-    'No scheduling conflicts with lunch',
-    'Short 5-minute walk across the river footbridge',
-    'Reduces Day 1 budget by ₹300',
-  ];
-
   const primaryAlt: Alternative = alternatives[0] || {
-    id: 'alt_001_orsay',
-    activity_id: 'act_002_louvre',
-    name: "Musée d'Orsay",
-    description: "Impressionist & Post-Impressionist masterpieces housed in a grand Beaux-Arts railway station.",
-    type: 'museum',
-    location: "1 Rue de la Légion d'Honneur, 75007 Paris",
-    start_time: '10:45',
-    end_time: '13:00',
-    duration_minutes: 135,
-    estimated_cost: 1900,
+    id: 'alt_001_primary',
+    activity_id: disruptedAct?.id || 'act_001',
+    name: `${cityName} Cultural Center`,
+    description: `Verified landmark alternative in ${cityName} with compatible timing.`,
+    type: 'sightseeing',
+    location: `${cityName} Central`,
+    start_time: disruptedAct?.start_time || '10:30',
+    end_time: disruptedAct?.end_time || '12:30',
+    duration_minutes: 120,
+    estimated_cost: Math.round(disruptedCost * 0.9),
     currency: currency,
     match_score: 98,
-    cost_difference: -300,
-    travel_time_difference: -5,
-    verification_source: 'Tavily Verified Open',
+    cost_difference: -Math.round(disruptedCost * 0.1),
+    travel_time_difference: 0,
+    verification_source: 'TravelPilot Verified Open',
     operating_hours: '09:30 - 18:00',
-    transit_notes: '5 min walk from Tuileries',
-    tags: ['Art & Museums', 'Impressionism', 'Walkable'],
-    image_url: 'https://images.unsplash.com/photo-1597935258735-e254c183921e?auto=format&fit=crop&w=1000&q=80',
+    transit_notes: `Direct transit within ${cityName}`,
+    tags: ['Culture', 'Sightseeing', 'Verified'],
+    image_url: 'https://images.unsplash.com/photo-1570168007204-dfb528c6958f?auto=format&fit=crop&w=1000&q=80',
   };
+
+  const altB: Alternative | undefined = alternatives[1];
+  const altC: Alternative | undefined = alternatives[2];
+
+  const selectionReasons: string[] = [
+    `Fits your curated schedule for ${cityName}`,
+    `Fits the ${disruptedSlot} available window`,
+    'No scheduling conflicts with subsequent itinerary stops',
+    `Preserves transit efficiency in ${cityName}`,
+    `Budget impact: ${formatCost(primaryAlt.estimated_cost)}`,
+  ];
 
   return (
     <div className="w-full max-w-[1320px] mx-auto px-margin-mobile md:px-margin py-8 pb-20">
@@ -73,7 +91,7 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
               Your plans changed. TravelPilot found an alternative.
             </h1>
             <p className="font-body-md text-sm sm:text-base text-on-surface-variant leading-relaxed">
-              Simulated disruption: Louvre Museum is unavailable. TravelPilot found an alternative that fits your schedule, interests, and budget.
+              Simulated disruption: {disruptedName} is unavailable. TravelPilot found an alternative in {cityName} that fits your schedule, interests, and budget.
             </p>
           </div>
 
@@ -99,19 +117,19 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
               </span>
               <span className="inline-flex items-center gap-1 font-label-sm text-xs px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-medium">
                 <span className="material-symbols-outlined text-[14px]">event_busy</span>
-                Venue Closure
+                Venue Disruption
               </span>
             </div>
 
             <div className="space-y-1">
               <div className="text-sm font-label-md text-outline line-through">
-                Louvre Museum (Main Courtyard)
+                {disruptedName}
               </div>
               <div className="font-headline-sm text-xl font-bold text-on-surface">
-                10:30 – 13:00 Slot
+                {disruptedSlot}
               </div>
               <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
-                Unscheduled administrative closure. Your schedule opened up 2h 30m in the 1st Arrondissement.
+                Unscheduled temporary closure in {cityName}. Your schedule opened up an opportunity for a verified alternative.
               </p>
             </div>
 
@@ -123,10 +141,10 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
                 </div>
                 <div>
                   <div className="font-label-md text-xs text-on-surface font-semibold">
-                    {formatCost(2200)} estimated cost removed
+                    {formatCost(disruptedCost)} estimated cost removed
                   </div>
                   <div className="font-body-sm text-[11px] text-outline">
-                    Original admission fee refunded
+                    {disruptedLoc}
                   </div>
                 </div>
               </div>
@@ -139,14 +157,14 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
                 Schedule Harmony
               </span>
               <div className="relative w-full h-8 bg-surface-container rounded-lg overflow-hidden flex text-xs font-label-sm font-medium">
-                <div className="w-[20%] bg-surface-container-high text-on-surface-variant flex items-center justify-center">
-                  09:00
+                <div className="w-[25%] bg-surface-container-high text-on-surface-variant flex items-center justify-center">
+                  09:30
                 </div>
                 <div className="w-[45%] bg-error-container text-on-error-container flex items-center justify-center gap-1 font-semibold">
-                  <span className="material-symbols-outlined text-[14px]">block</span> Free 2h 30m
+                  <span className="material-symbols-outlined text-[14px]">block</span> Open Slot
                 </div>
-                <div className="w-[35%] bg-surface-container-high text-on-surface-variant flex items-center justify-center">
-                  13:15 Lunch
+                <div className="w-[30%] bg-surface-container-high text-on-surface-variant flex items-center justify-center">
+                  Next Stop
                 </div>
               </div>
             </div>
@@ -164,27 +182,30 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
             </div>
 
             <div className="space-y-3 text-xs font-body-sm">
-              <div className="flex items-start gap-2.5">
-                <div className="w-2 h-2 rounded-full bg-secondary mt-1.5 shrink-0"></div>
-                <div>
-                  <div className="font-semibold text-on-surface">Tuileries Lunch (13:15)</div>
-                  <div className="text-outline">Preserved · 0 min delay · No itinerary shift</div>
+              {nextActs.length > 0 ? (
+                nextActs.map((act) => (
+                  <div key={act.id} className="flex items-start gap-2.5">
+                    <div className="w-2 h-2 rounded-full bg-secondary mt-1.5 shrink-0"></div>
+                    <div>
+                      <div className="font-semibold text-on-surface">{act.name} ({act.start_time})</div>
+                      <div className="text-outline">Preserved · Verified timing in {cityName}</div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex items-start gap-2.5">
+                  <div className="w-2 h-2 rounded-full bg-secondary mt-1.5 shrink-0"></div>
+                  <div>
+                    <div className="font-semibold text-on-surface">Subsequent Itinerary Stops</div>
+                    <div className="text-outline">Preserved · Zero conflict overlap</div>
+                  </div>
                 </div>
-              </div>
-
-              <div className="flex items-start gap-2.5">
-                <div className="w-2 h-2 rounded-full bg-secondary mt-1.5 shrink-0"></div>
-                <div>
-                  <div className="font-semibold text-on-surface">Seine Cruise (15:00)</div>
-                  <div className="text-outline">Confirmed · Pont Neuf boarding slip verified</div>
-                </div>
-              </div>
+              )}
 
               <div className="pt-2 flex items-center justify-between bg-surface-container-low rounded-xl p-3 border border-outline-variant/20">
-                <span className="text-on-surface-variant">Net contingency balance</span>
+                <span className="text-on-surface-variant">Contingency budget status</span>
                 <span className="font-headline-sm text-sm font-bold text-on-surface">
-                  {formatCost(5600)}{' '}
-                  <span className="text-secondary font-normal">(+{formatCost(300)})</span>
+                  Healthy <span className="text-secondary font-normal">(Aligned)</span>
                 </span>
               </div>
             </div>
@@ -199,7 +220,7 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
             <div className="relative w-full h-72 sm:h-80 overflow-hidden bg-surface-container">
               <img
                 className="w-full h-full object-cover"
-                src={primaryAlt.image_url || 'https://images.unsplash.com/photo-1597935258735-e254c183921e?auto=format&fit=crop&w=1000&q=80'}
+                src={primaryAlt.image_url || 'https://images.unsplash.com/photo-1570168007204-dfb528c6958f?auto=format&fit=crop&w=1000&q=80'}
                 alt={primaryAlt.name}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent"></div>
@@ -217,7 +238,7 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
               {/* Overlaid Destination Info */}
               <div className="absolute bottom-5 left-6 right-6 text-white">
                 <div className="font-label-sm text-xs tracking-widest uppercase text-white/80 font-medium">
-                  Left Bank · 7th Arrondissement
+                  {primaryAlt.location || `${cityName} District`}
                 </div>
                 <h2 className="font-headline-lg text-2xl sm:text-3xl text-white font-bold drop-shadow-sm mt-0.5">
                   {primaryAlt.name}
@@ -229,8 +250,8 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
                   </span>
                   <span>•</span>
                   <span className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[16px]">palette</span>
-                    Impressionist Masterpieces
+                    <span className="material-symbols-outlined text-[16px]">place</span>
+                    {primaryAlt.subtitle || cityName}
                   </span>
                 </div>
               </div>
@@ -242,7 +263,7 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-surface-container-low p-4 rounded-2xl space-y-1 border border-outline-variant/20">
                   <span className="font-label-sm text-xs text-outline uppercase tracking-wider font-semibold">
-                    Ticket Cost
+                    Estimated Cost
                   </span>
                   <div className="flex items-baseline gap-1.5">
                     <span className="font-headline-sm text-lg font-bold text-on-surface">
@@ -251,7 +272,7 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
                     <span className="font-label-sm text-xs text-secondary font-medium">estimated</span>
                   </div>
                   <div className="font-body-sm text-xs text-outline">
-                    {formatCost(300)} lower than Louvre
+                    {formatCost(Math.abs(primaryAlt.cost_difference || 0))} {primaryAlt.cost_difference && primaryAlt.cost_difference < 0 ? 'saving' : 'adjusted'}
                   </div>
                 </div>
 
@@ -260,19 +281,19 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
                     Transit Harmony
                   </span>
                   <div className="font-headline-sm text-lg font-semibold text-on-surface">
-                    5 min walk
+                    Convenient
                   </div>
-                  <div className="font-body-sm text-xs text-outline">from Tuileries</div>
+                  <div className="font-body-sm text-xs text-outline">Seamless connection</div>
                 </div>
 
                 <div className="bg-surface-container-low p-4 rounded-2xl space-y-1 border border-outline-variant/20">
                   <span className="font-label-sm text-xs text-outline uppercase tracking-wider font-semibold">
-                    Wait Time Estimate
+                    Verification
                   </span>
                   <div className="font-headline-sm text-lg font-semibold text-on-surface">
-                    Typical: ~10 mins
+                    Verified
                   </div>
-                  <div className="font-body-sm text-xs text-outline">Standard queue estimate</div>
+                  <div className="font-body-sm text-xs text-outline">Autonomous check passed</div>
                 </div>
               </div>
 
@@ -301,16 +322,16 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
                   </div>
                   <div>
                     <div className="font-label-md text-xs font-bold text-on-surface">
-                      Footbridge Crossing Route
+                      Connecting Route in {cityName}
                     </div>
                     <div className="font-body-sm text-xs text-on-surface-variant">
-                      Musée d'Orsay ➔ Passerelle Footbridge ➔ Tuileries Gardens
+                      {primaryAlt.transit_notes || `${primaryAlt.name} ➔ Direct connection to next scheduled stop`}
                     </div>
                   </div>
                 </div>
                 <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-surface-container-lowest text-on-surface font-label-sm text-xs shadow-2xs">
-                  <span className="material-symbols-outlined text-secondary text-[14px]">park</span>
-                  <span>Scenic riverside path</span>
+                  <span className="material-symbols-outlined text-secondary text-[14px]">verified</span>
+                  <span>Zero schedule overlap</span>
                 </div>
               </div>
 
@@ -328,16 +349,18 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
                     </span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setShowOtherOptions(!showOtherOptions)}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-space-md py-3 rounded-full bg-surface-container-low text-on-surface hover:bg-surface-container transition-all font-label-md text-sm border border-outline-variant/30 cursor-pointer"
-                  >
-                    <span>{showOtherOptions ? 'Hide Other Options' : 'See Other Options'}</span>
-                    <span className="material-symbols-outlined text-[18px]">
-                      {showOtherOptions ? 'expand_less' : 'expand_more'}
-                    </span>
-                  </button>
+                  {(altB || altC) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowOtherOptions(!showOtherOptions)}
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-space-md py-3 rounded-full bg-surface-container-low text-on-surface hover:bg-surface-container transition-all font-label-md text-sm border border-outline-variant/30 cursor-pointer"
+                    >
+                      <span>{showOtherOptions ? 'Hide Other Options' : 'See Other Options'}</span>
+                      <span className="material-symbols-outlined text-[18px]">
+                        {showOtherOptions ? 'expand_less' : 'expand_more'}
+                      </span>
+                    </button>
+                  )}
                 </div>
 
                 <button
@@ -353,113 +376,89 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
           </div>
 
           {/* Other Alternative Cards Grid */}
-          {showOtherOptions && (
+          {showOtherOptions && (altB || altC) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
-              {/* Option B: Musée de l'Orangerie */}
-              <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-xs border border-outline-variant/30 flex flex-col justify-between gap-4 group hover:shadow-md transition-all">
-                <div className="space-y-3">
-                  <div className="relative h-40 rounded-xl overflow-hidden bg-surface-container">
-                    <img
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      src="https://images.unsplash.com/photo-1549144511-f099e773c147?auto=format&fit=crop&w=600&q=80"
-                      alt="Musée de l'Orangerie"
-                    />
-                    <span className="absolute top-2 right-2 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white font-label-sm text-xs font-semibold">
-                      92% Match
-                    </span>
-                  </div>
-                  <div>
-                    <div className="font-label-sm text-xs text-outline">Option B · Direct in Tuileries</div>
-                    <div className="font-headline-sm text-base font-bold text-on-surface mt-0.5">
-                      Musée de l'Orangerie
+              {/* Option B */}
+              {altB && (
+                <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-xs border border-outline-variant/30 flex flex-col justify-between gap-4 group hover:shadow-md transition-all">
+                  <div className="space-y-3">
+                    <div className="relative h-40 rounded-xl overflow-hidden bg-surface-container">
+                      <img
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        src={altB.image_url || 'https://images.unsplash.com/photo-1549144511-f099e773c147?auto=format&fit=crop&w=600&q=80'}
+                        alt={altB.name}
+                      />
+                      <span className="absolute top-2 right-2 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white font-label-sm text-xs font-semibold">
+                        {altB.match_score || 92}% Match
+                      </span>
                     </div>
-                    <p className="font-body-sm text-xs text-on-surface-variant pt-1 leading-relaxed">
-                      Monet's Water Lilies murals in naturally lit oval sanctuaries. Direct walk to lunch venue.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-2 border-t border-outline-variant/20">
-                  <div className="flex items-center justify-between text-xs font-label-sm">
-                    <span className="text-outline">11:00 – 12:45</span>
-                    <span className="font-bold text-on-surface">{formatCost(1650)}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onApplyAlternative(
-                        alternatives[1] || {
-                          id: 'alt_002_orangerie',
-                          activity_id: 'act_002_louvre',
-                          name: "Musée de l'Orangerie",
-                          description: "Monet Water Lilies",
-                          start_time: '11:00',
-                          end_time: '12:45',
-                          estimated_cost: 1650,
-                          category: 'Museum',
-                          match_score: 92,
-                        }
-                      )
-                    }
-                    className="w-full py-2 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-label-sm text-xs font-semibold transition-colors border border-outline-variant/30 cursor-pointer"
-                  >
-                    Select L'Orangerie
-                  </button>
-                </div>
-              </div>
-
-              {/* Option C: Centre Pompidou */}
-              <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-xs border border-outline-variant/30 flex flex-col justify-between gap-4 group hover:shadow-md transition-all">
-                <div className="space-y-3">
-                  <div className="relative h-40 rounded-xl overflow-hidden bg-surface-container">
-                    <img
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      src="https://images.unsplash.com/photo-1509299349698-dd22323b5963?auto=format&fit=crop&w=600&q=80"
-                      alt="Centre Pompidou"
-                    />
-                    <span className="absolute top-2 right-2 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white font-label-sm text-xs font-semibold">
-                      84% Match
-                    </span>
-                  </div>
-                  <div>
-                    <div className="font-label-sm text-xs text-outline">Option C · Modern &amp; Contemporary</div>
-                    <div className="font-headline-sm text-base font-bold text-on-surface mt-0.5">
-                      Centre Pompidou
+                    <div>
+                      <div className="font-label-sm text-xs text-outline">Option B · {altB.location || cityName}</div>
+                      <div className="font-headline-sm text-base font-bold text-on-surface mt-0.5">
+                        {altB.name}
+                      </div>
+                      <p className="font-body-sm text-xs text-on-surface-variant pt-1 leading-relaxed">
+                        {altB.description || `Alternative sightseeing option in ${cityName}.`}
+                      </p>
                     </div>
-                    <p className="font-body-sm text-xs text-on-surface-variant pt-1 leading-relaxed">
-                      Modern art masters &amp; sweeping panoramic rooftop vistas. Requires short 12m Metro line 1.
-                    </p>
                   </div>
-                </div>
 
-                <div className="space-y-2 pt-2 border-t border-outline-variant/20">
-                  <div className="flex items-center justify-between text-xs font-label-sm">
-                    <span className="text-outline">10:30 – 12:30</span>
-                    <span className="font-bold text-on-surface">{formatCost(1800)}</span>
+                  <div className="space-y-2 pt-2 border-t border-outline-variant/20">
+                    <div className="flex items-center justify-between text-xs font-label-sm">
+                      <span className="text-outline">{altB.start_time || '11:00'} – {altB.end_time || '12:45'}</span>
+                      <span className="font-bold text-on-surface">{formatCost(altB.estimated_cost)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onApplyAlternative(altB)}
+                      className="w-full py-2 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-label-sm text-xs font-semibold transition-colors border border-outline-variant/30 cursor-pointer"
+                    >
+                      Select {altB.name}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onApplyAlternative(
-                        alternatives[2] || {
-                          id: 'alt_003_pompidou',
-                          activity_id: 'act_002_louvre',
-                          name: 'Centre Pompidou',
-                          description: 'Modern art masters',
-                          start_time: '10:30',
-                          end_time: '12:30',
-                          estimated_cost: 1800,
-                          category: 'Museum',
-                          match_score: 84,
-                        }
-                      )
-                    }
-                    className="w-full py-2 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-label-sm text-xs font-semibold transition-colors border border-outline-variant/30 cursor-pointer"
-                  >
-                    Select Pompidou
-                  </button>
                 </div>
-              </div>
+              )}
+
+              {/* Option C */}
+              {altC && (
+                <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-xs border border-outline-variant/30 flex flex-col justify-between gap-4 group hover:shadow-md transition-all">
+                  <div className="space-y-3">
+                    <div className="relative h-40 rounded-xl overflow-hidden bg-surface-container">
+                      <img
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        src={altC.image_url || 'https://images.unsplash.com/photo-1509299349698-dd22323b5963?auto=format&fit=crop&w=600&q=80'}
+                        alt={altC.name}
+                      />
+                      <span className="absolute top-2 right-2 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white font-label-sm text-xs font-semibold">
+                        {altC.match_score || 85}% Match
+                      </span>
+                    </div>
+                    <div>
+                      <div className="font-label-sm text-xs text-outline">Option C · {altC.location || cityName}</div>
+                      <div className="font-headline-sm text-base font-bold text-on-surface mt-0.5">
+                        {altC.name}
+                      </div>
+                      <p className="font-body-sm text-xs text-on-surface-variant pt-1 leading-relaxed">
+                        {altC.description || `Alternative sightseeing option in ${cityName}.`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-outline-variant/20">
+                    <div className="flex items-center justify-between text-xs font-label-sm">
+                      <span className="text-outline">{altC.start_time || '10:30'} – {altC.end_time || '12:30'}</span>
+                      <span className="font-bold text-on-surface">{formatCost(altC.estimated_cost)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onApplyAlternative(altC)}
+                      className="w-full py-2 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-label-sm text-xs font-semibold transition-colors border border-outline-variant/30 cursor-pointer"
+                    >
+                      Select {altC.name}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

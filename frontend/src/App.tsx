@@ -95,6 +95,7 @@ export function App() {
             onPreviewAlternative={() => setCurrentScreen('before_after')}
             onApplyAlternative={handleApplyAlternative}
             onBackToDashboard={() => setCurrentScreen('dashboard')}
+            trip={trip}
           />
         )}
 
@@ -113,6 +114,8 @@ export function App() {
             onSendMessage={handleSendMessage}
             isLoading={isChatLoading}
             onBackToDashboard={() => setCurrentScreen('dashboard')}
+            trip={trip}
+            currency={currency}
           />
         )}
       </main>

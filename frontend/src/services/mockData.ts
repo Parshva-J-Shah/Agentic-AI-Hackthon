@@ -540,7 +540,7 @@ export const INITIAL_CHAT_MESSAGES: AgentMessage[] = [
   {
     id: 'msg_01',
     sender: 'assistant',
-    text: 'Bonjour! I am your TravelPilot Concierge. I am continuously monitoring flight telemetry, local transport, and venue schedules for your Paris trip. How can I assist you today?',
+    text: 'Hello! I am your TravelPilot Assistant. I am continuously monitoring venue schedules, local transit, and timing constraints for your journey. How can I assist you today?',
     timestamp: '10:00 AM',
   },
 ];

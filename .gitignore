@@ -224,3 +224,9 @@ __marimo__/
 
 # Documentations
 Documentations/
+
+# Environment files
+.env
+*.env
+backend/.env
+frontend/.env.local
