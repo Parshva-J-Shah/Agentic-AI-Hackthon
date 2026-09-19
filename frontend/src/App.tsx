@@ -29,6 +29,9 @@ export function App() {
     handleCreateTrip,
     handleGenerationComplete,
     triggerLouvreDisruption,
+    handleResetDisruption,
+    handleToggleDisruption,
+    isDisrupting,
     handleApplyAlternative,
     handleCommitReplanning,
     handleSendMessage,
@@ -42,8 +45,9 @@ export function App() {
         onNavigate={(screen) => setCurrentScreen(screen as any)}
         currency={currency}
         onCurrencyToggle={toggleCurrency}
-        onTriggerDisruption={() => triggerLouvreDisruption()}
+        onTriggerDisruption={() => handleToggleDisruption()}
         isDisrupted={isDisrupted}
+        isDisrupting={isDisrupting}
       />
 
       {/* Main Screen Canvas */}
@@ -52,7 +56,7 @@ export function App() {
           <LandingPage
             onPlanTrip={() => setCurrentScreen('create_trip')}
             onExploreDemo={() => setCurrentScreen('dashboard')}
-            onTriggerDisruption={() => triggerLouvreDisruption()}
+            onTriggerDisruption={() => handleToggleDisruption()}
           />
         )}
 
@@ -77,10 +81,11 @@ export function App() {
             activeDayNumber={activeDayNumber}
             onSelectDay={setActiveDayNumber}
             isDisrupted={isDisrupted}
-            onTriggerDisruption={() => triggerLouvreDisruption()}
+            isDisrupting={isDisrupting}
+            onTriggerDisruption={() => handleToggleDisruption()}
             onAutoApplyFix={() => handleApplyAlternative(alternatives[0])}
             onInspectBeforeAfter={() => setCurrentScreen('before_after')}
-            onDismissDisruptionBanner={() => setCurrentScreen('dashboard')}
+            onDismissDisruptionBanner={() => handleResetDisruption()}
             chatMessages={chatMessages}
             onSendChatMessage={handleSendMessage}
             isChatLoading={isChatLoading}
@@ -95,6 +100,7 @@ export function App() {
             onPreviewAlternative={() => setCurrentScreen('before_after')}
             onApplyAlternative={handleApplyAlternative}
             onBackToDashboard={() => setCurrentScreen('dashboard')}
+            onResetDisruption={handleResetDisruption}
             trip={trip}
           />
         )}

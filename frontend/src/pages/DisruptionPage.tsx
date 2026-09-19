@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Alternative, Currency, Trip } from '../types/trip';
+import { resolveActivityImage, NEUTRAL_ACTIVITY_PLACEHOLDER, ActivityImage } from '../utils/imageUtils';
 
 interface DisruptionPageProps {
   alternatives: Alternative[];
@@ -8,6 +9,7 @@ interface DisruptionPageProps {
   onApplyAlternative: (alt: Alternative) => void;
   onBackToDashboard: () => void;
   trip?: Trip;
+  onResetDisruption?: () => void;
 }
 
 export const DisruptionPage: React.FC<DisruptionPageProps> = ({
@@ -17,6 +19,7 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
   onApplyAlternative,
   onBackToDashboard,
   trip,
+  onResetDisruption,
 }) => {
   const [showOtherOptions, setShowOtherOptions] = useState(true);
 
@@ -59,7 +62,7 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
     operating_hours: '09:30 - 18:00',
     transit_notes: `Direct transit within ${cityName}`,
     tags: ['Culture', 'Sightseeing', 'Verified'],
-    image_url: 'https://images.unsplash.com/photo-1570168007204-dfb528c6958f?auto=format&fit=crop&w=1000&q=80',
+    image_url: resolveActivityImage(`${cityName} Cultural Center`, cityName, 'sightseeing', undefined, destination),
   };
 
   const altB: Alternative | undefined = alternatives[1];
@@ -95,13 +98,26 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={onBackToDashboard}
-            className="px-space-md py-2 rounded-full bg-surface-container text-on-surface hover:bg-surface-container-high text-xs sm:text-sm font-label-md font-semibold transition-all shrink-0 cursor-pointer"
-          >
-            Return to Itinerary
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {onResetDisruption && (
+              <button
+                type="button"
+                onClick={onResetDisruption}
+                className="inline-flex items-center gap-1.5 px-space-md py-2 rounded-full bg-error/10 text-error hover:bg-error/20 text-xs sm:text-sm font-label-md font-semibold transition-all cursor-pointer border border-error/20"
+                title="Cancel simulated disruption"
+              >
+                <span className="material-symbols-outlined text-[16px]">restart_alt</span>
+                <span>Reset Disruption</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onBackToDashboard}
+              className="px-space-md py-2 rounded-full bg-surface-container text-on-surface hover:bg-surface-container-high text-xs sm:text-sm font-label-md font-semibold transition-all shrink-0 cursor-pointer"
+            >
+              Return to Itinerary
+            </button>
+          </div>
         </div>
       </div>
 
@@ -218,10 +234,13 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
           <div className="bg-surface-container-lowest rounded-3xl shadow-md border border-outline-variant/30 overflow-hidden flex flex-col">
             {/* Hero Image with integrated Match Badge */}
             <div className="relative w-full h-72 sm:h-80 overflow-hidden bg-surface-container">
-              <img
-                className="w-full h-full object-cover"
-                src={primaryAlt.image_url || 'https://images.unsplash.com/photo-1570168007204-dfb528c6958f?auto=format&fit=crop&w=1000&q=80'}
+              <ActivityImage
+                name={primaryAlt.name}
+                location={primaryAlt.location || cityName}
+                destination={destination}
+                initialUrl={primaryAlt.image_url}
                 alt={primaryAlt.name}
+                className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent"></div>
 
@@ -383,10 +402,13 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
                 <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-xs border border-outline-variant/30 flex flex-col justify-between gap-4 group hover:shadow-md transition-all">
                   <div className="space-y-3">
                     <div className="relative h-40 rounded-xl overflow-hidden bg-surface-container">
-                      <img
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        src={altB.image_url || 'https://images.unsplash.com/photo-1549144511-f099e773c147?auto=format&fit=crop&w=600&q=80'}
+                      <ActivityImage
+                        name={altB.name}
+                        location={altB.location || cityName}
+                        destination={destination}
+                        initialUrl={altB.image_url}
                         alt={altB.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       <span className="absolute top-2 right-2 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white font-label-sm text-xs font-semibold">
                         {altB.match_score || 92}% Match
@@ -424,10 +446,13 @@ export const DisruptionPage: React.FC<DisruptionPageProps> = ({
                 <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-xs border border-outline-variant/30 flex flex-col justify-between gap-4 group hover:shadow-md transition-all">
                   <div className="space-y-3">
                     <div className="relative h-40 rounded-xl overflow-hidden bg-surface-container">
-                      <img
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        src={altC.image_url || 'https://images.unsplash.com/photo-1509299349698-dd22323b5963?auto=format&fit=crop&w=600&q=80'}
+                      <ActivityImage
+                        name={altC.name}
+                        location={altC.location || cityName}
+                        destination={destination}
+                        initialUrl={altC.image_url}
                         alt={altC.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       <span className="absolute top-2 right-2 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white font-label-sm text-xs font-semibold">
                         {altC.match_score || 85}% Match

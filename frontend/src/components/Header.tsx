@@ -8,6 +8,7 @@ interface HeaderProps {
   onCurrencyToggle: () => void;
   onTriggerDisruption: () => void;
   isDisrupted?: boolean;
+  isDisrupting?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,6 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   onCurrencyToggle,
   onTriggerDisruption,
   isDisrupted = false,
+  isDisrupting = false,
 }) => {
   return (
     <header className="fixed top-0 left-0 right-0 w-full z-50 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.03)] border-b border-outline-variant/20">
@@ -70,20 +72,39 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Action Tools */}
         <div className="flex items-center gap-space-sm sm:gap-space-md">
-          {/* Simulate Disruption pill */}
+          {/* Simulate / Reset Disruption pill */}
           <button
             type="button"
             onClick={onTriggerDisruption}
+            disabled={isDisrupting}
             className={`inline-flex items-center gap-1.5 px-space-md py-space-xs rounded-full font-label-sm text-label-sm transition-all shadow-xs ${
-              isDisrupted
-                ? 'bg-error text-on-error shadow-error/20'
-                : 'bg-surface-container-low text-error border border-error/20 hover:bg-error-container'
+              isDisrupting
+                ? 'opacity-70 cursor-not-allowed bg-surface-container-low text-error border border-error/20'
+                : isDisrupted
+                ? 'bg-error text-on-error shadow-error/20 hover:bg-error/90 cursor-pointer'
+                : 'bg-surface-container-low text-error border border-error/20 hover:bg-error-container cursor-pointer'
             }`}
-            title="Simulate sudden Louvre Museum disruption"
+            title={
+              isDisrupting
+                ? 'Simulating Disruption…'
+                : isDisrupted
+                ? 'Reset simulated disruption'
+                : 'Simulate itinerary disruption'
+            }
           >
-            <span className="material-symbols-outlined text-[16px]">bolt</span>
+            {isDisrupting ? (
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0"></span>
+            ) : (
+              <span className="material-symbols-outlined text-[16px]">
+                {isDisrupted ? 'restart_alt' : 'bolt'}
+              </span>
+            )}
             <span className="hidden sm:inline font-semibold">
-              {isDisrupted ? 'Disruption Active' : 'Simulate Disruption'}
+              {isDisrupting
+                ? 'Simulating Disruption…'
+                : isDisrupted
+                ? 'Reset Disruption'
+                : 'Simulate Disruption'}
             </span>
           </button>
 

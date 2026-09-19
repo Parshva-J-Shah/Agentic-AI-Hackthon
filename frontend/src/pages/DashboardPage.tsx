@@ -18,6 +18,7 @@ interface DashboardPageProps {
   onSendChatMessage: (msg: string) => void;
   isChatLoading: boolean;
   onViewAlternatives: (activityId: string) => void;
+  isDisrupting?: boolean;
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({
@@ -26,6 +27,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   activeDayNumber,
   onSelectDay,
   isDisrupted,
+  isDisrupting = false,
   onTriggerDisruption,
   onViewAlternatives,
 }) => {
@@ -76,18 +78,40 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
         {/* Top Right Action Pills */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-start sm:self-auto">
-          {/* Simulate Disruption Pill */}
+          {/* Simulate / Reset Disruption Pill */}
           <button
             type="button"
             onClick={onTriggerDisruption}
-            className={`inline-flex items-center gap-1.5 px-space-md py-2 rounded-full font-label-md text-xs sm:text-sm font-semibold transition-all shadow-xs cursor-pointer ${
-              isDisrupted
-                ? 'bg-error text-on-error hover:bg-error/90'
-                : 'bg-surface-container-low text-error border border-error/20 hover:bg-error-container'
+            disabled={isDisrupting}
+            className={`inline-flex items-center gap-1.5 px-space-md py-2 rounded-full font-label-md text-xs sm:text-sm font-semibold transition-all shadow-xs ${
+              isDisrupting
+                ? 'opacity-70 cursor-not-allowed bg-surface-container-low text-error border border-error/20'
+                : isDisrupted
+                ? 'bg-error text-on-error hover:bg-error/90 shadow-error/20 cursor-pointer'
+                : 'bg-surface-container-low text-error border border-error/20 hover:bg-error-container cursor-pointer'
             }`}
+            title={
+              isDisrupting
+                ? 'Simulating Disruption…'
+                : isDisrupted
+                ? 'Reset simulated disruption'
+                : 'Simulate itinerary disruption'
+            }
           >
-            <span className="material-symbols-outlined text-[16px]">bolt</span>
-            <span>Simulate Disruption (Demo)</span>
+            {isDisrupting ? (
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0"></span>
+            ) : (
+              <span className="material-symbols-outlined text-[16px]">
+                {isDisrupted ? 'restart_alt' : 'bolt'}
+              </span>
+            )}
+            <span>
+              {isDisrupting
+                ? 'Simulating Disruption…'
+                : isDisrupted
+                ? 'Reset Disruption'
+                : 'Simulate Disruption (Demo)'}
+            </span>
           </button>
 
           {/* Ask TravelPilot Black Pill */}

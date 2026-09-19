@@ -23,6 +23,7 @@ import {
   MOCK_AGENT_STEPS_GENERATION,
   MOCK_AGENT_STEPS_DISRUPTION,
 } from './mockData';
+import { resolveActivityImage } from '../utils/imageUtils';
 
 const RAW_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const API_BASE = RAW_URL.endsWith('/api') ? RAW_URL : `${RAW_URL.replace(/\/+$/, '')}/api`;
@@ -66,7 +67,12 @@ function mapBackendItinerary(
           status: act.status || 'planned',
           status_label: act.status_label || (costVal === 0 ? 'Free Entry' : 'Verified'),
           tags: act.tags || [act.category || 'Sightseeing'],
-          image_url: act.image_url,
+          image_url: resolveActivityImage(
+            act.name || 'Scheduled Activity',
+            act.location || defaultLoc,
+            act.category || act.type,
+            act.image_url
+          ),
           transit_after: act.transit_after,
           disruption_reason: act.disruption_reason,
         };
@@ -208,7 +214,7 @@ function mapBackendAlternatives(
       operating_hours: alt.operating_hours || '09:30 – 18:00',
       transit_notes: alt.transit_notes || 'Direct 8-min walk across pedestrian bridge',
       tags: alt.tags || [alt.category || 'Museum', 'Walkable'],
-      image_url: alt.image_url,
+      image_url: resolveActivityImage(alt.name, alt.location || defaultLoc, alt.category, alt.image_url),
       is_top_match: idx === 0,
     };
   });
@@ -415,8 +421,8 @@ export const api = {
             tr.tool === 'replan_itinerary'
               ? 'Rebuilding schedule'
               : tr.tool === 'get_current_itinerary'
-              ? 'Reading itinerary'
-              : 'Validating constraints',
+                ? 'Reading itinerary'
+                : 'Validating constraints',
         }));
 
         return {
@@ -706,5 +712,24 @@ export const api = {
       status: 'completed',
       steps: runId.includes('disrupt') ? MOCK_AGENT_STEPS_DISRUPTION : MOCK_AGENT_STEPS_GENERATION,
     };
+  },
+
+  /**
+   * GET /api/images/search?query=...
+   * Dynamic Activity Image Search
+   */
+  async searchActivityImage(query: string): Promise<string | null> {
+    try {
+      const response = await fetch(`${API_BASE}/images/search?query=${encodeURIComponent(query)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.image_url) {
+          return data.image_url;
+        }
+      }
+    } catch {
+      // Backend unavailable fallback
+    }
+    return null;
   },
 };

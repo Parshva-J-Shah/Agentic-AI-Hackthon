@@ -30,6 +30,7 @@ export function useTrip() {
   const [activeDayNumber, setActiveDayNumber] = useState<number>(1);
   const [currency, setCurrency] = useState<Currency>('INR');
   const [isDisrupted, setIsDisrupted] = useState<boolean>(false);
+  const [isDisrupting, setIsDisrupting] = useState<boolean>(false);
   const [alternatives, setAlternatives] = useState<Alternative[]>(MOCK_DISRUPTED_ALTERNATIVES);
   const [changes, setChanges] = useState<ChangeSummary[]>(MOCK_REPLANNED_CHANGES);
   const [chatMessages, setChatMessages] = useState<AgentMessage[]>(INITIAL_CHAT_MESSAGES);
@@ -65,6 +66,18 @@ export function useTrip() {
       localStorage.setItem('travelpilot_current_screen', currentScreen);
     }
   }, [currentScreen]);
+
+  // Edge Case D: Auto-sync isDisrupted to false if trip has no disrupted activities
+  useEffect(() => {
+    if (isDisrupted && trip?.itinerary?.days) {
+      const hasAnyDisrupted = trip.itinerary.days.some((day) =>
+        day.activities.some((act) => act.status === 'disrupted')
+      );
+      if (!hasAnyDisrupted && (trip.status === 'active' || trip.status === 'created')) {
+        setIsDisrupted(false);
+      }
+    }
+  }, [trip, isDisrupted]);
 
   // Toggle currency between INR and EUR
   const toggleCurrency = useCallback(() => {
@@ -102,6 +115,8 @@ export function useTrip() {
 
   // Trigger simulated disruption on current Day 1 activity
   const triggerLouvreDisruption = async (activityId?: string) => {
+    if (isDisrupting) return;
+    setIsDisrupting(true);
     setIsDisrupted(true);
     const targetAct =
       trip.itinerary?.days?.[0]?.activities?.find((a) => a.id === activityId) ||
@@ -137,6 +152,52 @@ export function useTrip() {
       setCurrentScreen('disruption');
     } catch {
       setCurrentScreen('disruption');
+    } finally {
+      setIsDisrupting(false);
+    }
+  };
+
+  // Reset simulated disruption and return UI cleanly to original normal state
+  const handleResetDisruption = async () => {
+    setIsDisrupted(false);
+    try {
+      if (trip?.trip_id) {
+        const cleanTrip = await api.getTrip(trip.trip_id);
+        if (cleanTrip && cleanTrip.trip_id) {
+          setTrip(cleanTrip);
+        }
+      }
+    } catch {
+      // Fallback: restore any locally marked disrupted activities back to scheduled
+      setTrip((prev) => ({
+        ...prev,
+        status: 'active',
+        itinerary: {
+          ...prev.itinerary,
+          days: prev.itinerary.days.map((day) => ({
+            ...day,
+            activities: day.activities.map((act) =>
+              act.status === 'disrupted'
+                ? { ...act, status: 'planned' as const, status_label: 'Planned', disruption_reason: undefined }
+                : act
+            ),
+          })),
+        },
+      }));
+    }
+
+    if (currentScreen === 'disruption' || currentScreen === 'before_after') {
+      setCurrentScreen('dashboard');
+    }
+  };
+
+  // Toggle between Simulate Disruption and Reset Disruption
+  const handleToggleDisruption = async (activityId?: string) => {
+    if (isDisrupting) return;
+    if (isDisrupted) {
+      await handleResetDisruption();
+    } else {
+      await triggerLouvreDisruption(activityId);
     }
   };
 
@@ -230,6 +291,7 @@ export function useTrip() {
     currency,
     toggleCurrency,
     isDisrupted,
+    isDisrupting,
     alternatives,
     changes,
     chatMessages,
@@ -239,6 +301,8 @@ export function useTrip() {
     handleCreateTrip,
     handleGenerationComplete,
     triggerLouvreDisruption,
+    handleResetDisruption,
+    handleToggleDisruption,
     handleApplyAlternative,
     handleCommitReplanning,
     handleSendMessage,

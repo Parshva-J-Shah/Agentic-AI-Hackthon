@@ -1,5 +1,6 @@
 import React from 'react';
 import { Alternative, Currency } from '../types/trip';
+import { ActivityImage } from '../utils/imageUtils';
 
 interface AlternativeCardProps {
   alternative: Alternative;
@@ -103,8 +104,10 @@ export const AlternativeCard: React.FC<AlternativeCardProps> = ({
         {alternative.image_url && (
           <div className="md:col-span-4">
             <div className="w-full h-24 rounded-lg overflow-hidden relative shadow-inner bg-surface-container">
-              <img
-                src={alternative.image_url}
+              <ActivityImage
+                name={alternative.name}
+                location={alternative.location}
+                initialUrl={alternative.image_url}
                 alt={alternative.name}
                 className="w-full h-full object-cover"
               />

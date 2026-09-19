@@ -1,5 +1,6 @@
 import React from 'react';
 import { Activity, Currency } from '../types/trip';
+import { ActivityImage } from '../utils/imageUtils';
 
 interface ActivityCardProps {
   activity: Activity;
@@ -111,8 +112,10 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
           {/* Thumbnail Image on Right */}
           {activity.image_url && (
             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 bg-surface-container shadow-xs">
-              <img
-                src={activity.image_url}
+              <ActivityImage
+                name={activity.name}
+                location={activity.location}
+                initialUrl={activity.image_url}
                 alt={activity.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
