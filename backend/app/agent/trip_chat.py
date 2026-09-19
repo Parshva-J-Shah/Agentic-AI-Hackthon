@@ -7,6 +7,7 @@ from app.agent.planner import build_plan
 from app.tools.registry import execute_tool
 from app.services.trip_store import get_trip
 from app.services.agent_run_store import record_agent_run
+from app.agent.gemini_client import generate_text
 
 
 def _synthesize_reply(
@@ -14,6 +15,7 @@ def _synthesize_reply(
     tool_results: list[dict[str, Any]],
     simulate: bool = False,
     trip: Any = None,
+    message: str = "",
 ) -> str:
     """Deterministic, high-quality reply synthesis for all travel assistant intents."""
     if intent in {"DISRUPTION", "REPLAN"}:
@@ -64,10 +66,46 @@ def _synthesize_reply(
         if itin_tool and itin_tool.get("success"):
             itin = itin_tool.get("itinerary", {})
             days = itin.get("days", [])
-            lines = [f"Here is your current itinerary ({itin.get('total_cost', 0.0)} {itin.get('currency', 'EUR')} total):"]
+            if not days:
+                return "Your itinerary is currently empty or being planned."
+
+            # If user asked a specific temporal question, synthesize a direct answer
+            is_specific_query = any(
+                w in message.lower()
+                for w in ["tomorrow", "morning", "afternoon", "evening", "today", "day", "next", "what should i do", "what am i doing"]
+            )
+            if is_specific_query and message:
+                try:
+                    itin_summary = []
+                    for idx, d in enumerate(days, 1):
+                        day_acts = [
+                            f"  - {a.get('start_time', '')}-{a.get('end_time', '')}: {a.get('name', '')} ({a.get('description', '')})"
+                            for a in d.get("activities", [])
+                        ]
+                        itin_summary.append(f"Day {idx} ({d.get('date', '')}):\n" + "\n".join(day_acts))
+                    prompt = f"""
+You are TravelPilot, an intelligent travel assistant.
+The user is asking about their scheduled itinerary.
+Current itinerary:
+{chr(10).join(itin_summary)}
+
+User question: "{message}"
+
+Answer the user's specific question directly based on their scheduled itinerary. If they ask about tomorrow or tomorrow morning, refer to the activities scheduled for that time. Be concise, accurate, and friendly.
+"""
+                    ai_reply = generate_text(prompt)
+                    if ai_reply and len(ai_reply.strip()) > 20:
+                        return ai_reply.strip()
+                except Exception as exc:
+                    print(f"[TravelPilot] Gemini synthesis error for ITINERARY_QUERY: {exc}")
+
+            # Deterministic presentation of full itinerary
+            curr = itin.get("currency", "EUR")
+            curr_sym = "₹" if curr == "INR" else ("$" if curr == "USD" else ("¥" if curr == "JPY" else "€"))
+            lines = [f"Here is your current itinerary ({curr_sym}{itin.get('total_cost', 0.0):.2f} total):"]
             for idx, d in enumerate(days, 1):
-                act_names = [a.get("name") for a in d.get("activities", [])]
-                lines.append(f"• Day {idx} ({d.get('date')}): {', '.join(act_names) if act_names else 'Free day'}")
+                act_names = [a.get("name") for a in d.get("activities", []) if a.get("name")]
+                lines.append(f"• Day {idx} ({d.get('date', '')}): {', '.join(act_names) if act_names else 'Free day'}")
             return "\n".join(lines)
         return "Your itinerary is currently being planned."
 
@@ -76,22 +114,85 @@ def _synthesize_reply(
             (r["result"] for r in tool_results if r.get("tool") == "search_web"),
             None,
         )
-        if search_tool and search_tool.get("success"):
-            results = search_tool.get("results", [])
-            top = results[0] if results else None
-            if top:
-                snippet = top.get("content", "")[:250]
-                return (
-                    f"Based on travel information for your query:\n\n{snippet}...\n\n"
-                    f"(Note: Web search results are informational and do not guarantee real-time booking availability.)"
-                )
-        return "I checked external travel information for your query."
+        destination = getattr(trip, "destination", "") if trip else ""
+        results = (search_tool.get("results") or []) if (search_tool and search_tool.get("success")) else []
+
+        if results:
+            context_text = "\n\n".join(
+                f"Title: {r.get('title')}\nDetails: {r.get('content')}"
+                for r in results[:4]
+            )
+            prompt = f"""
+You are TravelPilot, a helpful AI travel agent.
+The user is traveling to {destination}.
+User question: "{message}"
+
+Here is current travel search information from Tavily:
+{context_text}
+
+Instructions:
+- Answer the user's question directly, accurately, and naturally based on the search results.
+- If asking about famous food spots, dishes, or attractions, highlight the top recognized options and provide brief helpful context (e.g. location or what makes them notable).
+- Do not claim a single place is definitively or universally "the most famous" if multiple popular spots are known; present the top options fairly.
+- Keep the response concise, engaging, and well-structured with bullet points.
+- Conclude with a brief reminder that web recommendations are informational.
+"""
+            try:
+                ai_reply = generate_text(prompt)
+                if ai_reply and len(ai_reply.strip()) > 30:
+                    return ai_reply.strip()
+            except Exception as exc:
+                print(f"[TravelPilot] Gemini synthesis error for ACTIVITY_QUERY: {exc}")
+
+            # Deterministic clean fallback formatting of Tavily search results
+            lines = [f"Here are notable recommendations for **{destination or 'your trip'}**:"]
+            for r in results[:3]:
+                title = r.get("title", "Recommendation")
+                content = r.get("content", "").strip()
+                if len(content) > 180:
+                    content = content[:180].rsplit(" ", 1)[0] + "..."
+                lines.append(f"• **{title}**: {content}")
+            lines.append("\n*(Note: Web search results are informational and do not guarantee real-time booking availability.)*")
+            return "\n\n".join(lines)
+        else:
+            try:
+                prompt = f"""
+You are TravelPilot, a helpful AI travel agent.
+The user is traveling to {destination}.
+User question: "{message}"
+
+Answer the user's travel question concisely, accurately, and helpfully.
+"""
+                ai_reply = generate_text(prompt)
+                if ai_reply and len(ai_reply.strip()) > 20:
+                    return ai_reply.strip()
+            except Exception:
+                pass
+            return f"I checked travel information for {destination or 'your destination'}, but could not find specific details for that query. Please try asking about another activity or place!"
 
     if intent == "FIT_ACTIVITY":
         val_tool = next(
             (r["result"] for r in tool_results if r.get("tool") == "validate_itinerary"),
             None,
         )
+        destination = getattr(trip, "destination", "") if trip else ""
+
+        try:
+            val_status = "Valid / Fits cleanly" if (val_tool and val_tool.get("valid")) else f"Conflicts: {val_tool.get('errors') if val_tool else 'None'}"
+            prompt = f"""
+You are TravelPilot travel agent.
+The user is asking: "{message}"
+Trip destination: {destination}
+Schedule validation: {val_status}
+
+Explain whether the activity can fit into the traveler's itinerary, suggest how or when it could fit if feasible, and keep your answer concise and helpful.
+"""
+            ai_reply = generate_text(prompt)
+            if ai_reply and len(ai_reply.strip()) > 20:
+                return ai_reply.strip()
+        except Exception:
+            pass
+
         if val_tool and val_tool.get("valid"):
             return "The activity fits within your schedule and budget without creating conflicts."
         elif val_tool:
@@ -171,6 +272,7 @@ def run_trip_chat(
             tool_results=tool_results,
             simulate=simulate,
             trip=trip,
+            message=message,
         )
 
         run_record = record_agent_run(
@@ -229,10 +331,17 @@ def run_trip_chat(
                 before_itin = result.get("itinerary")
 
         elif tool_name == "search_web":
+            destination = getattr(trip, "destination", "") or ""
+            query_str = message.strip()
+            if destination:
+                city_part = destination.split(",")[0].strip().lower()
+                if city_part and city_part not in query_str.lower():
+                    query_str = f"{query_str} in {destination}"
+
             result = execute_tool(
                 "search_web",
                 {
-                    "query": message,
+                    "query": query_str,
                     "max_results": 5,
                 },
             )
@@ -293,6 +402,7 @@ def run_trip_chat(
         tool_results=tool_results,
         simulate=simulate,
         trip=trip,
+        message=message,
     )
 
     run_record = record_agent_run(
