@@ -1,4 +1,4 @@
-﻿from app.agent.planner import build_plan
+from app.agent.planner import build_plan
 
 
 TEST_CASES = [
@@ -20,11 +20,11 @@ TEST_CASES = [
     ),
     (
         "DISRUPTION",
-        "get_current_itinerary",
+        "handle_disruption",
     ),
     (
         "REPLAN",
-        "get_current_itinerary",
+        "replan_itinerary",
     ),
 ]
 

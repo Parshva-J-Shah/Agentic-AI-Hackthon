@@ -1,4 +1,4 @@
-﻿import os
+import os
 import time
 
 from dotenv import load_dotenv
@@ -28,15 +28,22 @@ FALLBACK_MODELS = [
 
 
 def generate_text(prompt: str) -> str:
-    response = client.models.generate_content(
-        model=PRIMARY_MODEL,
-        contents=prompt,
-    )
+    models_to_try = [PRIMARY_MODEL] + FALLBACK_MODELS
+    last_error = None
 
-    if not response.text:
-        raise RuntimeError("Gemini returned an empty response")
+    for model in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+            )
+            if response.text:
+                return response.text
+        except Exception as exc:
+            last_error = exc
+            continue
 
-    return response.text
+    raise RuntimeError(f"All Gemini text generation models failed. Last error: {last_error}")
 
 
 def _generate_structured_with_model(

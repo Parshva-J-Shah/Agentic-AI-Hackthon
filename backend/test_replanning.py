@@ -108,6 +108,10 @@ print(
     result["changes"]["budget"]["currency"],
 )
 
+assert result["changes"]["budget"]["before"] == 472.0
+assert result["changes"]["budget"]["after"] == 466.0
+assert result["changes"]["budget"]["delta"] == -6.0
+
 print()
 print("=" * 70)
 print("FINAL RESULT: DISRUPTION + REPLANNING TEST PASSED")

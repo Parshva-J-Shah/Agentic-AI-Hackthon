@@ -1,4 +1,4 @@
-﻿from typing import Any
+from typing import Any
 
 
 def update_itinerary_tool(
@@ -95,11 +95,23 @@ def update_itinerary_tool(
                         applied.append(change)
                         break
 
-    total_cost = sum(
+    original_total = itinerary.get("total_cost")
+    original_activities_sum = sum(
+        float(act.get("cost", 0.0) or 0.0)
+        for d in itinerary.get("days", [])
+        for act in d.get("activities", [])
+    )
+    new_activities_sum = sum(
         float(activity.get("cost", 0.0) or 0.0)
         for day in updated["days"]
         for activity in day["activities"]
     )
+
+    if original_total is not None and float(original_total) > 0:
+        base_cost = max(0.0, float(original_total) - original_activities_sum)
+        total_cost = base_cost + new_activities_sum
+    else:
+        total_cost = new_activities_sum
 
     updated["total_cost"] = round(total_cost, 2)
 

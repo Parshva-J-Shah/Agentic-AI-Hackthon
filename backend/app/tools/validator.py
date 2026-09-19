@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 from typing import Any
 
 
@@ -65,9 +65,16 @@ def validate_itinerary_tool(
                     f"'{previous[2]}' and '{current[2]}'."
                 )
 
-    if budget is not None and total_cost > budget:
+    itinerary_total = itinerary.get("total_cost")
+    effective_total = (
+        float(itinerary_total)
+        if itinerary_total is not None and float(itinerary_total) > 0
+        else total_cost
+    )
+
+    if budget is not None and effective_total > budget:
         errors.append(
-            f"Total itinerary cost {total_cost:.2f} "
+            f"Total itinerary cost {effective_total:.2f} "
             f"exceeds budget {budget:.2f}."
         )
 
@@ -81,5 +88,5 @@ def validate_itinerary_tool(
         "valid": len(errors) == 0,
         "errors": errors,
         "warnings": warnings,
-        "total_cost": round(total_cost, 2),
+        "total_cost": round(effective_total, 2),
     }
