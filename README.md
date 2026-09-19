@@ -631,8 +631,30 @@ TravelPilot answers:
 
 ---
 
+## 💻 Running the Frontend
+
+To start the React frontend application:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The application will run locally at `http://localhost:5173/`.
+
+To build for production:
+
+```bash
+npm run build
+npm run preview
+```
+
+---
+
 ## 📜 License
 
 This project was created for the Agentic AI Hackathon.
 
 License details can be added based on the team's preferred open-source or project licensing terms.
+
