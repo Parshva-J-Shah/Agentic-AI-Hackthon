@@ -86,7 +86,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             }}
             className="inline-flex items-center gap-1.5 px-space-md py-2 rounded-full bg-primary text-on-primary font-label-md text-xs sm:text-sm font-semibold hover:bg-neutral-800 transition-all shadow-xs cursor-pointer"
           >
-            <span className="material-symbols-outlined text-[16px]">chat_spark</span>
+            <span className="material-symbols-outlined text-[16px]">smart_toy</span>
             <span>Ask TravelPilot</span>
           </button>
         </div>
