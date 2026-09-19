@@ -6,7 +6,7 @@ export const Footer: React.FC = () => {
       <div className="max-w-[1320px] mx-auto px-margin-mobile md:px-margin flex flex-col md:flex-row items-center justify-between gap-space-md">
         <div className="flex items-center gap-space-xs text-on-surface-variant font-body-sm text-body-sm">
           <span className="font-semibold text-on-surface">TravelPilot</span>
-          <span>© 2025 Curated Journeys. All rights reserved.</span>
+          <span>© 2026 Curated Journeys. All rights reserved.</span>
         </div>
         <div className="flex items-center gap-space-lg">
           <span className="text-on-surface-variant hover:text-on-surface transition-colors font-label-sm text-label-sm cursor-pointer">
