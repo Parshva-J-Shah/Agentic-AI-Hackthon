@@ -2,12 +2,14 @@ import React from 'react';
 
 interface FooterProps {
   onNavigateHome?: () => void;
+  onNavigateChat?: () => void;
   onOpenPrivacy?: () => void;
   onOpenSupport?: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onNavigateHome,
+  onNavigateChat,
   onOpenPrivacy,
   onOpenSupport,
 }) => {
@@ -21,7 +23,7 @@ export const Footer: React.FC<FooterProps> = ({
         <div className="flex items-center gap-space-lg">
           <button
             type="button"
-            onClick={onNavigateHome}
+            onClick={onNavigateChat || onNavigateHome}
             className="text-on-surface-variant hover:text-on-surface transition-colors font-label-sm text-label-sm cursor-pointer bg-transparent border-none p-0"
           >
             TravelPilot AI

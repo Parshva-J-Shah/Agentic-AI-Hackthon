@@ -213,6 +213,13 @@ function AppContent() {
       {/* Global Footer */}
       <Footer
         onNavigateHome={() => setCurrentScreen('landing')}
+        onNavigateChat={() => {
+          if (!user) {
+            setCurrentScreen('login');
+          } else {
+            setCurrentScreen('assistant');
+          }
+        }}
         onOpenPrivacy={() => setPrivacyOpen(true)}
         onOpenSupport={() => setSupportOpen(true)}
       />
