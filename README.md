@@ -664,9 +664,3 @@ Database  → Supabase
 🔗 Live Demo: https://travelpilot-liart.vercel.app/
 
 For local development, start the backend and frontend separately using the commands above.
-
-📜 License
-
-This project was created for the Agentic AI Hackathon.
-
-License details can be added based on the team's preferred open-source or project licensing terms.
