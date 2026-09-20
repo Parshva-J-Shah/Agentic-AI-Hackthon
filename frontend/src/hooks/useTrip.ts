@@ -17,6 +17,8 @@ import {
 
 export type ScreenType =
   | 'landing'
+  | 'login'
+  | 'signup'
   | 'create_trip'
   | 'loading'
   | 'dashboard'

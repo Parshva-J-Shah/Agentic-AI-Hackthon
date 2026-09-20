@@ -1,5 +1,6 @@
-import React from 'react';
-import { useTrip } from './hooks/useTrip';
+import React, { useEffect } from 'react';
+import { useTrip, ScreenType } from './hooks/useTrip';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { LandingPage } from './pages/LandingPage';
@@ -9,8 +10,20 @@ import { DashboardPage } from './pages/DashboardPage';
 import { DisruptionPage } from './pages/DisruptionPage';
 import { BeforeAfterPage } from './pages/BeforeAfterPage';
 import { AssistantPage } from './pages/AssistantPage';
+import { LoginPage } from './pages/LoginPage';
+import { SignupPage } from './pages/SignupPage';
 
-export function App() {
+const PROTECTED_SCREENS: ScreenType[] = [
+  'create_trip',
+  'loading',
+  'dashboard',
+  'disruption',
+  'before_after',
+  'assistant',
+];
+
+function AppContent() {
+  const { user, loading: authLoading } = useAuth();
   const {
     currentScreen,
     setCurrentScreen,
@@ -28,7 +41,6 @@ export function App() {
     pendingConstraints,
     handleCreateTrip,
     handleGenerationComplete,
-    triggerLouvreDisruption,
     handleResetDisruption,
     handleToggleDisruption,
     isDisrupting,
@@ -37,12 +49,46 @@ export function App() {
     handleSendMessage,
   } = useTrip();
 
+  // Route Guard: Redirect to Login if unauthenticated user tries to access protected screens
+  useEffect(() => {
+    if (!authLoading && !user && PROTECTED_SCREENS.includes(currentScreen)) {
+      setCurrentScreen('login');
+    }
+  }, [authLoading, user, currentScreen, setCurrentScreen]);
+
+  // Redirect to Dashboard if already authenticated user accesses Login/Signup directly
+  useEffect(() => {
+    if (!authLoading && user && (currentScreen === 'login' || currentScreen === 'signup')) {
+      setCurrentScreen('dashboard');
+    }
+  }, [authLoading, user, currentScreen, setCurrentScreen]);
+
+  // Loading state while checking persistent Supabase session
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center antialiased">
+        <div className="w-9 h-9 rounded-full border-3 border-outline-variant/40 border-t-primary animate-spin mb-4" />
+        <span className="font-label-md text-sm text-on-surface-variant font-medium tracking-wide">
+          Loading TravelPilot…
+        </span>
+      </div>
+    );
+  }
+
+  const navigatePostAuth = () => {
+    if (trip?.itinerary?.days && trip.itinerary.days.length > 0) {
+      setCurrentScreen('dashboard');
+    } else {
+      setCurrentScreen('create_trip');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background font-body-md text-on-surface flex flex-col antialiased">
       {/* Global Brand Header */}
       <Header
         currentScreen={currentScreen}
-        onNavigate={(screen) => setCurrentScreen(screen as any)}
+        onNavigate={(screen) => setCurrentScreen(screen as ScreenType)}
         currency={currency}
         onCurrencyToggle={toggleCurrency}
         onTriggerDisruption={() => handleToggleDisruption()}
@@ -54,27 +100,56 @@ export function App() {
       <main className="flex-1 pt-24">
         {currentScreen === 'landing' && (
           <LandingPage
-            onPlanTrip={() => setCurrentScreen('create_trip')}
-            onExploreDemo={() => setCurrentScreen('dashboard')}
+            onPlanTrip={() => {
+              if (!user) {
+                setCurrentScreen('login');
+              } else {
+                setCurrentScreen('create_trip');
+              }
+            }}
+            onExploreDemo={() => {
+              if (!user) {
+                setCurrentScreen('login');
+              } else {
+                setCurrentScreen('dashboard');
+              }
+            }}
             onTriggerDisruption={() => handleToggleDisruption()}
           />
         )}
 
-        {currentScreen === 'create_trip' && (
+        {currentScreen === 'login' && (
+          <LoginPage
+            onSuccess={navigatePostAuth}
+            onNavigateToSignup={() => setCurrentScreen('signup')}
+            onNavigateToLanding={() => setCurrentScreen('landing')}
+          />
+        )}
+
+        {currentScreen === 'signup' && (
+          <SignupPage
+            onSuccess={navigatePostAuth}
+            onNavigateToLogin={() => setCurrentScreen('login')}
+            onNavigateToLanding={() => setCurrentScreen('landing')}
+          />
+        )}
+
+        {/* Protected screens: only rendered when user is authenticated */}
+        {user && currentScreen === 'create_trip' && (
           <CreateTripPage
             onSubmit={handleCreateTrip}
             isLoading={isFormSubmitting}
           />
         )}
 
-        {currentScreen === 'loading' && (
+        {user && currentScreen === 'loading' && (
           <LoadingPage
             constraints={pendingConstraints}
             onComplete={handleGenerationComplete}
           />
         )}
 
-        {currentScreen === 'dashboard' && (
+        {user && currentScreen === 'dashboard' && (
           <DashboardPage
             trip={trip}
             currency={currency}
@@ -93,7 +168,7 @@ export function App() {
           />
         )}
 
-        {currentScreen === 'disruption' && (
+        {user && currentScreen === 'disruption' && (
           <DisruptionPage
             alternatives={alternatives}
             currency={currency}
@@ -105,7 +180,7 @@ export function App() {
           />
         )}
 
-        {currentScreen === 'before_after' && (
+        {user && currentScreen === 'before_after' && (
           <BeforeAfterPage
             changes={changes}
             currency={currency}
@@ -114,7 +189,7 @@ export function App() {
           />
         )}
 
-        {currentScreen === 'assistant' && (
+        {user && currentScreen === 'assistant' && (
           <AssistantPage
             messages={chatMessages}
             onSendMessage={handleSendMessage}
@@ -129,6 +204,14 @@ export function App() {
       {/* Global Footer */}
       <Footer />
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

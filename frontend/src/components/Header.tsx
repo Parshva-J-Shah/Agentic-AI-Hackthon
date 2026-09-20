@@ -1,5 +1,6 @@
 import React from 'react';
 import { Currency } from '../types/trip';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   currentScreen: string;
@@ -20,13 +21,28 @@ export const Header: React.FC<HeaderProps> = ({
   isDisrupted = false,
   isDisrupting = false,
 }) => {
+  const { user, signOut } = useAuth();
+
+  const handleProtectedNav = (screen: string) => {
+    if (!user) {
+      onNavigate('login');
+    } else {
+      onNavigate(screen);
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    onNavigate('landing');
+  };
+
   return (
     <header className="fixed top-0 left-0 right-0 w-full z-50 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.03)] border-b border-outline-variant/20">
       <div className="h-20 max-w-[1320px] mx-auto px-margin-mobile md:px-margin flex items-center justify-between">
         {/* Brand Logo & Name */}
         <button
           onClick={() => onNavigate('landing')}
-          className="flex items-center gap-space-xs text-left focus:outline-none group"
+          className="flex items-center gap-space-xs text-left focus:outline-none group cursor-pointer"
         >
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary shadow-sm group-hover:opacity-85 transition-opacity">
             <span className="material-symbols-outlined text-[18px]">explore</span>
@@ -40,7 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
         <nav className="hidden md:flex items-center gap-1 bg-surface-container-low p-1 rounded-full border border-outline-variant/30">
           <button
             onClick={() => onNavigate('landing')}
-            className={`px-space-md py-space-xs rounded-full font-label-md text-label-md transition-all ${
+            className={`px-space-md py-space-xs rounded-full font-label-md text-label-md transition-all cursor-pointer ${
               currentScreen === 'landing'
                 ? 'bg-surface-container-highest text-on-surface font-semibold shadow-xs'
                 : 'text-on-surface-variant hover:text-on-surface'
@@ -49,8 +65,8 @@ export const Header: React.FC<HeaderProps> = ({
             Overview
           </button>
           <button
-            onClick={() => onNavigate('dashboard')}
-            className={`px-space-md py-space-xs rounded-full font-label-md text-label-md transition-all ${
+            onClick={() => handleProtectedNav('dashboard')}
+            className={`px-space-md py-space-xs rounded-full font-label-md text-label-md transition-all cursor-pointer ${
               currentScreen === 'dashboard' || currentScreen === 'disruption' || currentScreen === 'before_after'
                 ? 'bg-surface-container-highest text-on-surface font-semibold shadow-xs'
                 : 'text-on-surface-variant hover:text-on-surface'
@@ -59,8 +75,8 @@ export const Header: React.FC<HeaderProps> = ({
             My Trips
           </button>
           <button
-            onClick={() => onNavigate('assistant')}
-            className={`px-space-md py-space-xs rounded-full font-label-md text-label-md transition-all ${
+            onClick={() => handleProtectedNav('assistant')}
+            className={`px-space-md py-space-xs rounded-full font-label-md text-label-md transition-all cursor-pointer ${
               currentScreen === 'assistant'
                 ? 'bg-surface-container-highest text-on-surface font-semibold shadow-xs'
                 : 'text-on-surface-variant hover:text-on-surface'
@@ -112,19 +128,40 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onCurrencyToggle}
-            className="px-space-sm py-space-xs rounded-full bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container font-label-sm text-label-sm tracking-wide transition-all border border-outline-variant/30"
+            className="px-space-sm py-space-xs rounded-full bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container font-label-sm text-label-sm tracking-wide transition-all border border-outline-variant/30 cursor-pointer"
           >
             {currency === 'INR' ? 'EUR / INR (₹)' : 'EUR / INR (€)'}
           </button>
 
-          {/* User Profile Avatar */}
-          <div className="flex items-center">
-            <img
-              alt="Traveler Profile"
-              className="w-8 h-8 rounded-full object-cover ring-1 ring-outline-variant/40"
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80"
-            />
-          </div>
+          {/* User Auth controls */}
+          {user ? (
+            <div className="flex items-center gap-2">
+              <div
+                className="w-8 h-8 rounded-full bg-secondary text-on-secondary font-label-sm font-semibold flex items-center justify-center ring-1 ring-outline-variant/40 text-xs"
+                title={user.email || 'User'}
+              >
+                {user.email ? user.email.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="px-space-sm py-space-xs rounded-full bg-surface-container-low text-on-surface-variant hover:text-error hover:bg-error/10 font-label-sm text-label-sm transition-all border border-outline-variant/30 flex items-center gap-1 cursor-pointer"
+                title="Log out"
+              >
+                <span className="material-symbols-outlined text-[16px]">logout</span>
+                <span className="hidden sm:inline font-medium">Log out</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onNavigate('login')}
+              className="px-space-md py-space-xs rounded-full bg-primary text-on-primary hover:bg-neutral-800 font-label-sm text-label-sm font-semibold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[16px]">login</span>
+              <span>Sign In</span>
+            </button>
+          )}
         </div>
       </div>
     </header>
