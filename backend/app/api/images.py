@@ -1,6 +1,9 @@
 import os
 import requests
+from dotenv import load_dotenv
 from fastapi import APIRouter, Query
+
+load_dotenv()
 
 router = APIRouter(
     prefix="/api/images",
@@ -11,19 +14,20 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 
 # In-memory cache for dynamic image search results
-_IMAGE_CACHE: dict[str, str | None] = {}
+_IMAGE_CACHE: dict[str, list[str]] = {}
 
 
-def _search_tavily_image(query: str) -> str | None:
-    if not TAVILY_API_KEY:
-        return None
+def _search_tavily_images(query: str) -> list[str]:
+    api_key = os.getenv("TAVILY_API_KEY") or TAVILY_API_KEY
+    if not api_key:
+        return []
 
     cleaned_query = query.strip()
     payload = {
-        "api_key": TAVILY_API_KEY,
+        "api_key": api_key,
         "query": cleaned_query,
         "search_depth": "basic",
-        "max_results": 5,
+        "max_results": 8,
         "include_images": True,
         "include_answer": False,
         "include_raw_content": False,
@@ -37,10 +41,12 @@ def _search_tavily_image(query: str) -> str | None:
             bad_tokens = [
                 ".svg", ".gif", "favicon", "avatar", "user-avatar", "logo",
                 "icon", "1x1", "pixel", "tracking", "sprite", "placeholder",
-                "ytimg", "youtube", "tiktok", "facebook.com/tr",
+                "ytimg", "youtube", "tiktok", "facebook.com/tr", "analytics",
+                "doubleclick",
             ]
 
             scored_candidates: list[tuple[int, str]] = []
+            seen_urls = set()
 
             # Generic tokenization of meaningful words from the query
             query_words = [
@@ -51,15 +57,21 @@ def _search_tavily_image(query: str) -> str | None:
             for img in images:
                 if not isinstance(img, str) or not img.startswith("http"):
                     continue
-                img_lower = img.lower()
+                norm_img = img.strip()
+                if norm_img in seen_urls:
+                    continue
+
+                img_lower = norm_img.lower()
 
                 # Reject non-photo, tracking or icon artifacts
                 if any(bad in img_lower for bad in bad_tokens):
                     continue
 
+                seen_urls.add(norm_img)
+
                 score = 0
                 # Prefer secure HTTPS
-                if img.startswith("https://"):
+                if norm_img.startswith("https://"):
                     score += 5
 
                 # Generic relevance: reward URLs containing words from the activity/location query
@@ -68,21 +80,50 @@ def _search_tavily_image(query: str) -> str | None:
                         score += 10
 
                 # Prefer trusted photo platforms and high-resolution sources
-                if any(host in img_lower for host in ["tripadvisor", "wikimedia", "wikipedia", "squarespace", "cloudinary", "travel"]):
+                if any(host in img_lower for host in ["tripadvisor", "wikimedia", "wikipedia", "squarespace", "cloudinary", "travel", "unsplash", "pexels"]):
                     score += 3
 
-                scored_candidates.append((score, img))
+                scored_candidates.append((score, norm_img))
 
             if scored_candidates:
                 scored_candidates.sort(key=lambda x: x[0], reverse=True)
-                return scored_candidates[0][1]
+                return [c[1] for c in scored_candidates[:5]]
     except Exception:
         pass
 
-    return None
+    return []
 
 
-def _search_wikipedia_image(query: str) -> str | None:
+def _search_wikipedia_images(query: str) -> list[str]:
+    headers = {"User-Agent": "TravelPilot/1.0 (travelpilot@example.com)"}
+    # 1. Search generator query
+    try:
+        url = "https://en.wikipedia.org/w/api.php"
+        params = {
+            "action": "query",
+            "format": "json",
+            "generator": "search",
+            "gsrsearch": query.strip(),
+            "gsrlimit": 3,
+            "prop": "pageimages",
+            "pithumbsize": 600,
+            "origin": "*",
+        }
+        res = requests.get(url, params=params, headers=headers, timeout=5)
+        if res.ok:
+            data = res.json()
+            pages = data.get("query", {}).get("pages", {})
+            results: list[str] = []
+            for page in pages.values():
+                thumb = page.get("thumbnail", {}).get("source")
+                if thumb and thumb.startswith("http"):
+                    results.append(thumb)
+            if results:
+                return results
+    except Exception:
+        pass
+
+    # 2. Direct title lookup
     try:
         url = "https://en.wikipedia.org/w/api.php"
         params = {
@@ -93,41 +134,58 @@ def _search_wikipedia_image(query: str) -> str | None:
             "pithumbsize": 600,
             "origin": "*",
         }
-        res = requests.get(url, params=params, timeout=5)
+        res = requests.get(url, params=params, headers=headers, timeout=5)
         if res.ok:
             data = res.json()
             pages = data.get("query", {}).get("pages", {})
+            results = []
             for page in pages.values():
                 thumb = page.get("thumbnail", {}).get("source")
                 if thumb and thumb.startswith("http"):
-                    return thumb
+                    results.append(thumb)
+            return results
     except Exception:
         pass
 
-    return None
+    return []
 
 
 @router.get("/search")
 def search_image(query: str = Query(..., description="Activity and location search query")):
     cleaned = query.strip()
     if not cleaned:
-        return {"success": False, "image_url": None}
+        return {"success": False, "image_url": None, "image_urls": []}
 
     cache_key = cleaned.lower()
     if cache_key in _IMAGE_CACHE:
-        return {"success": True, "image_url": _IMAGE_CACHE[cache_key], "cached": True}
+        cached_urls = _IMAGE_CACHE[cache_key]
+        return {
+            "success": bool(cached_urls),
+            "image_url": cached_urls[0] if cached_urls else None,
+            "image_urls": cached_urls,
+            "query": cleaned,
+            "cached": True,
+        }
 
     # 1. Try Tavily Image Search
-    image_url = _search_tavily_image(cleaned)
+    candidates = _search_tavily_images(cleaned)
 
-    # 2. Fallback to Wikipedia Image Search
-    if not image_url:
-        image_url = _search_wikipedia_image(cleaned)
+    # 2. Fallback to Wikipedia Image Search if needed
+    if not candidates:
+        wiki_candidates = _search_wikipedia_images(cleaned)
+        if wiki_candidates:
+            candidates.extend(wiki_candidates)
+    elif len(candidates) < 3:
+        wiki_candidates = _search_wikipedia_images(cleaned)
+        for w in wiki_candidates:
+            if w not in candidates:
+                candidates.append(w)
 
-    _IMAGE_CACHE[cache_key] = image_url
+    _IMAGE_CACHE[cache_key] = candidates
 
     return {
-        "success": bool(image_url),
-        "image_url": image_url,
+        "success": bool(candidates),
+        "image_url": candidates[0] if candidates else None,
+        "image_urls": candidates,
         "query": cleaned,
     }

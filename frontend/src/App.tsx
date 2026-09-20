@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTrip, ScreenType } from './hooks/useTrip';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
+import { PrivacyModal, SupportModal } from './components/InfoModals';
 import { LandingPage } from './pages/LandingPage';
 import { CreateTripPage } from './pages/CreateTripPage';
 import { LoadingPage } from './pages/LoadingPage';
@@ -44,10 +45,15 @@ function AppContent() {
     handleResetDisruption,
     handleToggleDisruption,
     isDisrupting,
+    originalItinerary,
+    selectedAlternative,
     handleApplyAlternative,
     handleCommitReplanning,
     handleSendMessage,
   } = useTrip();
+
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
 
   // Route Guard: Redirect to Login if unauthenticated user tries to access protected screens
   useEffect(() => {
@@ -182,6 +188,9 @@ function AppContent() {
 
         {user && currentScreen === 'before_after' && (
           <BeforeAfterPage
+            trip={trip}
+            originalItinerary={originalItinerary || undefined}
+            selectedAlternative={selectedAlternative || undefined}
             changes={changes}
             currency={currency}
             onCommit={handleCommitReplanning}
@@ -202,7 +211,15 @@ function AppContent() {
       </main>
 
       {/* Global Footer */}
-      <Footer />
+      <Footer
+        onNavigateHome={() => setCurrentScreen('landing')}
+        onOpenPrivacy={() => setPrivacyOpen(true)}
+        onOpenSupport={() => setSupportOpen(true)}
+      />
+
+      {/* Footer Info Modals */}
+      <PrivacyModal isOpen={privacyOpen} onClose={() => setPrivacyOpen(false)} />
+      <SupportModal isOpen={supportOpen} onClose={() => setSupportOpen(false)} />
     </div>
   );
 }

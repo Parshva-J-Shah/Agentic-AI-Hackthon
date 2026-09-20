@@ -1,17 +1,25 @@
 import React, { useState } from 'react';
-import { Currency, ChangeSummary as ChangeSummaryType } from '../types/trip';
+import { Currency, ChangeSummary as ChangeSummaryType, Trip, Itinerary, Alternative } from '../types/trip';
+import { ActivityImage } from '../utils/imageUtils';
 
 interface ChangeSummaryProps {
   changes: ChangeSummaryType[];
   currency: Currency;
   onCommit: () => void;
   onRevert: () => void;
+  trip?: Trip;
+  originalItinerary?: Itinerary;
+  selectedAlternative?: Alternative;
 }
 
 export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
+  changes,
   currency,
   onCommit,
   onRevert,
+  trip,
+  originalItinerary,
+  selectedAlternative,
 }) => {
   const [toastVisible, setToastVisible] = useState(false);
 
@@ -29,6 +37,57 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
     }, 600);
   };
 
+  const destinationName = trip?.destination?.split(',')[0]?.trim() || 'Selected Destination';
+
+  // Resolve original and adapted Day 1
+  const originalDay = originalItinerary?.days?.[0] || trip?.itinerary?.days?.[0];
+  const adaptedDay = trip?.itinerary?.days?.[0];
+
+  const originalActivities = originalDay?.activities || [];
+  const adaptedActivities = adaptedDay?.activities || [];
+
+  // Identify removed/disrupted activity from original
+  const removedChange = changes.find(
+    (c) => c.type === 'activity_removed' || c.event_type === 'REMOVED'
+  );
+  const oldActName = removedChange?.old_activity?.toLowerCase();
+  const disruptedAct =
+    originalActivities.find((a) => a.status === 'disrupted') ||
+    (oldActName ? originalActivities.find((a) => a.name.toLowerCase() === oldActName) : undefined) ||
+    originalActivities.find((a) => !adaptedActivities.some((b) => b.id === a.id)) ||
+    originalActivities[0];
+
+  // Identify added/replacement activity in adapted
+  const addedChange = changes.find(
+    (c) => c.type === 'activity_added' || c.event_type === 'ADDED'
+  );
+  const newActName = addedChange?.new_activity?.toLowerCase();
+  const selectedAltName = selectedAlternative?.name?.toLowerCase();
+  const replacementAct =
+    adaptedActivities.find((a) => a.status === 'replanned') ||
+    (newActName ? adaptedActivities.find((a) => a.name.toLowerCase() === newActName) : undefined) ||
+    (selectedAltName ? adaptedActivities.find((a) => a.name.toLowerCase() === selectedAltName) : undefined) ||
+    adaptedActivities.find((a) => !originalActivities.some((b) => b.id === a.id)) ||
+    adaptedActivities[0];
+
+  const disruptedName = disruptedAct?.name || removedChange?.old_activity || 'Scheduled Activity';
+  const replacementName = replacementAct?.name || addedChange?.new_activity || selectedAlternative?.name || 'Alternative Activity';
+  const replannedLocation = disruptedAct?.location || replacementAct?.location || destinationName;
+
+  // Calculate budget differences
+  const costDelta =
+    changes.reduce((acc, c) => acc + (c.cost_delta || 0), 0) ||
+    (replacementAct && disruptedAct
+      ? replacementAct.estimated_cost - disruptedAct.estimated_cost
+      : (selectedAlternative?.cost_difference ?? -300));
+
+  const originalDayCost =
+    originalDay?.daily_cost ?? originalActivities.reduce((s, a) => s + a.estimated_cost, 0);
+  const adaptedDayCost =
+    adaptedDay?.daily_cost ?? adaptedActivities.reduce((s, a) => s + a.estimated_cost, 0);
+
+  const walkingKm = (adaptedDay?.walking_distance_km ?? originalDay?.walking_distance_km ?? 3.4).toFixed(1);
+
   return (
     <div className="w-full max-w-[1320px] mx-auto px-margin-mobile md:px-margin pb-20">
       {/* Top Editorial Header & Status Section */}
@@ -44,7 +103,7 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
               Trips
             </button>
             <span>/</span>
-            <span className="hover:text-on-surface transition-colors">Paris Trip</span>
+            <span className="hover:text-on-surface transition-colors">{destinationName} Trip</span>
             <span>/</span>
             <span className="text-on-surface font-semibold">Schedule Update</span>
           </nav>
@@ -52,7 +111,9 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
           {/* Status Pill */}
           <div className="inline-flex items-center gap-2 px-space-md py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-xs font-semibold shadow-xs">
             <span className="material-symbols-outlined text-[16px]">check_circle</span>
-            <span>0 Conflicts · {formatCost(300)} Budget Saved</span>
+            <span>
+              0 Conflicts · {costDelta <= 0 ? `${formatCost(Math.abs(costDelta))} Budget Saved` : `+${formatCost(costDelta)} Budget Adjustment`}
+            </span>
           </div>
         </div>
 
@@ -66,7 +127,7 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
               Your itinerary is seamlessly updated
             </h1>
             <p className="font-body-lg text-base sm:text-lg text-on-surface-variant max-w-2xl mt-1">
-              Review how TravelPilot reorganized Day 1 without disrupting lunch or evening plans.
+              Review how TravelPilot reorganized Day 1 in {destinationName} without disrupting subsequent plans.
             </p>
           </div>
 
@@ -81,7 +142,7 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
                   Replanned Focus
                 </span>
                 <span className="font-headline-sm text-base font-bold text-on-surface">
-                  Day 1 · Left Bank
+                  Day 1 · {replannedLocation}
                 </span>
               </div>
             </div>
@@ -101,7 +162,7 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
               </h2>
             </div>
             <span className="px-3 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-xs font-semibold">
-              Louvre unavailable
+              {disruptedName} unavailable
             </span>
           </div>
 
@@ -109,98 +170,66 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
           <div className="flex flex-col gap-4 relative pl-5">
             <div className="absolute left-1.5 top-3 bottom-4 w-[1.5px] bg-outline-variant/60"></div>
 
-            {/* Stop 1 */}
-            <div className="relative flex items-start gap-4">
-              <div className="w-3.5 h-3.5 rounded-full bg-surface-container-highest -ml-5 mt-1.5 z-10 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-outline"></div>
-              </div>
-              <div className="flex-1 bg-surface-container-lowest/80 p-4 rounded-xl shadow-2xs border border-outline-variant/20">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-on-surface">09:15</span>
-                  <span className="text-outline font-medium">Confirmed</span>
-                </div>
-                <p className="font-bold text-sm text-on-surface mt-1">Café de Flore</p>
-                <p className="font-body-sm text-xs text-on-surface-variant">
-                  Saint-Germain-des-Prés · Breakfast &amp; Espresso
-                </p>
-              </div>
-            </div>
+            {originalActivities.map((act, idx) => {
+              const isTargetDisrupted =
+                act.id === disruptedAct?.id ||
+                act.name === disruptedName ||
+                act.status === 'disrupted';
 
-            {/* Stop 2: Cancelled Louvre Block */}
-            <div className="relative flex items-start gap-4">
-              <div className="w-3.5 h-3.5 rounded-full bg-error-container -ml-5 mt-1.5 z-10 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-error"></div>
-              </div>
-              <div className="flex-1 bg-error-container/20 p-4 rounded-xl shadow-2xs border border-error/30">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-error line-through">10:30 – 13:00</span>
-                  <span className="px-2 py-0.5 rounded-full bg-error text-on-error font-label-sm text-[11px] font-bold">
-                    Cancelled
-                  </span>
-                </div>
-                <p className="font-bold text-sm text-outline line-through mt-1">Louvre Museum</p>
-                <p className="font-body-sm text-xs text-outline line-through">
-                  Temporary administrative closure
-                </p>
-                <div className="mt-2 flex items-center gap-1.5 text-error font-label-sm text-xs font-semibold">
-                  <span className="material-symbols-outlined text-[14px]">warning</span>
-                  <span>Simulated cancellation: Venue unavailable</span>
-                </div>
-              </div>
-            </div>
+              if (isTargetDisrupted) {
+                return (
+                  <div key={act.id || idx} className="relative flex items-start gap-4">
+                    <div className="w-3.5 h-3.5 rounded-full bg-error-container -ml-5 mt-1.5 z-10 flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-error"></div>
+                    </div>
+                    <div className="flex-1 bg-error-container/20 p-4 rounded-xl shadow-2xs border border-error/30">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-error line-through">
+                          {act.start_time} – {act.end_time}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-error text-on-error font-label-sm text-[11px] font-bold">
+                          Cancelled
+                        </span>
+                      </div>
+                      <p className="font-bold text-sm text-outline line-through mt-1">
+                        {act.name}
+                      </p>
+                      <p className="font-body-sm text-xs text-outline line-through">
+                        {act.location} · {act.description || 'Temporary administrative closure'}
+                      </p>
+                      <div className="mt-2 flex items-center gap-1.5 text-error font-label-sm text-xs font-semibold">
+                        <span className="material-symbols-outlined text-[14px]">warning</span>
+                        <span>
+                          {act.disruption_reason || 'Simulated cancellation: Venue unavailable'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
 
-            {/* Stop 3 */}
-            <div className="relative flex items-start gap-4">
-              <div className="w-3.5 h-3.5 rounded-full bg-surface-container-highest -ml-5 mt-1.5 z-10 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-outline"></div>
-              </div>
-              <div className="flex-1 bg-surface-container-lowest/80 p-4 rounded-xl shadow-2xs border border-outline-variant/20">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-on-surface">13:15</span>
-                  <span className="text-outline font-medium">Confirmed</span>
+              return (
+                <div key={act.id || idx} className="relative flex items-start gap-4">
+                  <div className="w-3.5 h-3.5 rounded-full bg-surface-container-highest -ml-5 mt-1.5 z-10 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-outline"></div>
+                  </div>
+                  <div className="flex-1 bg-surface-container-lowest/80 p-4 rounded-xl shadow-2xs border border-outline-variant/20">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-on-surface">{act.start_time}</span>
+                      <span className="text-outline font-medium">Confirmed</span>
+                    </div>
+                    <p className="font-bold text-sm text-on-surface mt-1">{act.name}</p>
+                    <p className="font-body-sm text-xs text-on-surface-variant">
+                      {act.location} · {act.description || act.type}
+                    </p>
+                  </div>
                 </div>
-                <p className="font-bold text-sm text-on-surface mt-1">Lunch at Tuileries Bistro</p>
-                <p className="font-body-sm text-xs text-on-surface-variant">Table reservation for 2</p>
-              </div>
-            </div>
-
-            {/* Stop 4 */}
-            <div className="relative flex items-start gap-4">
-              <div className="w-3.5 h-3.5 rounded-full bg-surface-container-highest -ml-5 mt-1.5 z-10 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-outline"></div>
-              </div>
-              <div className="flex-1 bg-surface-container-lowest/80 p-4 rounded-xl shadow-2xs border border-outline-variant/20">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-on-surface">15:00</span>
-                  <span className="text-outline font-medium">Confirmed</span>
-                </div>
-                <p className="font-bold text-sm text-on-surface mt-1">Seine Architectural Cruise</p>
-                <p className="font-body-sm text-xs text-on-surface-variant">
-                  Pont Neuf Pier · Boarding passes issued
-                </p>
-              </div>
-            </div>
-
-            {/* Stop 5 */}
-            <div className="relative flex items-start gap-4">
-              <div className="w-3.5 h-3.5 rounded-full bg-surface-container-highest -ml-5 mt-1.5 z-10 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-outline"></div>
-              </div>
-              <div className="flex-1 bg-surface-container-lowest/80 p-4 rounded-xl shadow-2xs border border-outline-variant/20">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-on-surface">19:30</span>
-                  <span className="text-outline font-medium">Confirmed</span>
-                </div>
-                <p className="font-bold text-sm text-on-surface mt-1">Dinner at Le Christine</p>
-                <p className="font-body-sm text-xs text-on-surface-variant">
-                  Michelin Guide Selection · Confirmed
-                </p>
-              </div>
-            </div>
+              );
+            })}
           </div>
 
           <div className="mt-auto pt-3 border-t border-outline-variant/20 text-on-surface-variant font-body-sm text-xs">
-            Original route spanned 4.2 km total walking distance with scheduled river crossing queues.
+            Original route in {destinationName} spanned {walkingKm} km total walking distance.
           </div>
         </div>
 
@@ -226,121 +255,90 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
           <div className="flex flex-col gap-4 relative pl-5">
             <div className="absolute left-1.5 top-3 bottom-4 w-[1.5px] bg-secondary/40"></div>
 
-            {/* Stop 1 */}
-            <div className="relative flex items-start gap-4">
-              <div className="w-3.5 h-3.5 rounded-full bg-surface-container -ml-5 mt-1.5 z-10 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-secondary"></div>
-              </div>
-              <div className="flex-1 bg-surface-container-low/50 p-4 rounded-xl shadow-2xs border border-outline-variant/20">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-secondary">09:15</span>
-                  <span className="text-on-surface-variant font-medium">Maintained</span>
-                </div>
-                <p className="font-bold text-sm text-on-surface mt-1">Café de Flore</p>
-                <p className="font-body-sm text-xs text-on-surface-variant">
-                  Saint-Germain-des-Prés · Breakfast &amp; Espresso
-                </p>
-              </div>
-            </div>
+            {adaptedActivities.map((act, idx) => {
+              const isReplacement =
+                act.id === replacementAct?.id ||
+                act.name === replacementName ||
+                act.status === 'replanned';
 
-            {/* Stop 2: Replaced Orsay Hero Card */}
-            <div className="relative flex items-start gap-4">
-              <div className="w-3.5 h-3.5 rounded-full bg-secondary -ml-5 mt-1.5 z-10 flex items-center justify-center shadow-xs">
-                <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
-              </div>
-              <div className="flex-1 bg-secondary-fixed/30 p-4 sm:p-5 rounded-2xl shadow-xs border border-secondary/40">
-                <div className="flex flex-wrap items-center justify-between gap-1">
-                  <span className="font-bold text-secondary text-xs sm:text-sm">
-                    10:45 – 13:00
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-secondary text-on-secondary font-label-sm text-[11px] font-bold">
-                    Suggested replacement · {formatCost(1900)}
-                  </span>
-                </div>
+              if (isReplacement) {
+                return (
+                  <div key={act.id || idx} className="relative flex items-start gap-4">
+                    <div className="w-3.5 h-3.5 rounded-full bg-secondary -ml-5 mt-1.5 z-10 flex items-center justify-center shadow-xs">
+                      <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
+                    </div>
+                    <div className="flex-1 bg-secondary-fixed/30 p-4 sm:p-5 rounded-2xl shadow-xs border border-secondary/40">
+                      <div className="flex flex-wrap items-center justify-between gap-1">
+                        <span className="font-bold text-secondary text-xs sm:text-sm">
+                          {act.start_time} – {act.end_time}
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-full bg-secondary text-on-secondary font-label-sm text-[11px] font-bold">
+                          Suggested replacement · {formatCost(act.estimated_cost)}
+                        </span>
+                      </div>
 
-                <div className="flex flex-col sm:flex-row gap-4 mt-3 items-start">
-                  <div className="w-full sm:w-24 h-20 rounded-xl overflow-hidden shrink-0 bg-surface-container shadow-2xs">
-                    <img
-                      src="https://images.unsplash.com/photo-1597935258735-e254c183921e?auto=format&fit=crop&w=400&q=80"
-                      alt="Musée d'Orsay"
-                      className="w-full h-full object-cover"
-                    />
+                      <div className="flex flex-col sm:flex-row gap-4 mt-3 items-start">
+                        <div className="w-full sm:w-24 h-20 rounded-xl overflow-hidden shrink-0 bg-surface-container shadow-2xs">
+                          <ActivityImage
+                            name={act.name}
+                            location={act.location}
+                            destination={destinationName}
+                            initialUrl={act.image_url}
+                            alt={act.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="flex flex-col justify-center">
+                          <p className="font-headline-sm text-base font-bold text-on-surface">
+                            {act.name}
+                          </p>
+                          <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed mt-1">
+                            {act.description || `${act.location} · Seamless autonomous alignment eliminates transit friction.`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-2 border-t border-secondary/20 flex items-center justify-between text-xs font-label-sm text-secondary">
+                        <span className="flex items-center gap-1 font-semibold">
+                          <span className="material-symbols-outlined text-[16px]">footprint</span>
+                          {selectedAlternative?.transit_notes ||
+                            (selectedAlternative?.travel_time_difference
+                              ? `${Math.abs(selectedAlternative.travel_time_difference)} min faster transit`
+                              : `Direct connection within ${destinationName}`)}
+                        </span>
+                        <span className="font-bold">
+                          {formatCost(act.estimated_cost)}{' '}
+                          {disruptedAct ? `(was ${formatCost(disruptedAct.estimated_cost)})` : ''}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex flex-col justify-center">
-                    <p className="font-headline-sm text-base font-bold text-on-surface">
-                      Musée d'Orsay
-                    </p>
-                    <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed mt-1">
-                      Impressionist Masterpieces &amp; Sculptures. Left Bank alignment eliminates transit friction.
+                );
+              }
+
+              return (
+                <div key={act.id || idx} className="relative flex items-start gap-4">
+                  <div className="w-3.5 h-3.5 rounded-full bg-surface-container -ml-5 mt-1.5 z-10 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-secondary"></div>
+                  </div>
+                  <div className="flex-1 bg-surface-container-low/50 p-4 rounded-xl shadow-2xs border border-outline-variant/20">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-secondary">{act.start_time}</span>
+                      <span className="text-on-surface-variant font-medium">Maintained</span>
+                    </div>
+                    <p className="font-bold text-sm text-on-surface mt-1">{act.name}</p>
+                    <p className="font-body-sm text-xs text-on-surface-variant">
+                      {act.location} · {act.description || act.type}
                     </p>
                   </div>
                 </div>
-
-                <div className="mt-3 pt-2 border-t border-secondary/20 flex items-center justify-between text-xs font-label-sm text-secondary">
-                  <span className="flex items-center gap-1 font-semibold">
-                    <span className="material-symbols-outlined text-[16px]">footprint</span>
-                    12 min walk from café
-                  </span>
-                  <span className="font-bold">{formatCost(1900)} (was {formatCost(2200)})</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Stop 3 */}
-            <div className="relative flex items-start gap-4">
-              <div className="w-3.5 h-3.5 rounded-full bg-surface-container -ml-5 mt-1.5 z-10 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-secondary"></div>
-              </div>
-              <div className="flex-1 bg-surface-container-low/50 p-4 rounded-xl shadow-2xs border border-outline-variant/20">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-secondary">13:15</span>
-                  <span className="text-secondary font-medium">Maintained (+5 min buffer)</span>
-                </div>
-                <p className="font-bold text-sm text-on-surface mt-1">Lunch at Tuileries Bistro</p>
-                <p className="font-body-sm text-xs text-on-surface-variant">
-                  Passerelle Léopold-Sédar-Senghor direct bridge crossing
-                </p>
-              </div>
-            </div>
-
-            {/* Stop 4 */}
-            <div className="relative flex items-start gap-4">
-              <div className="w-3.5 h-3.5 rounded-full bg-surface-container -ml-5 mt-1.5 z-10 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-secondary"></div>
-              </div>
-              <div className="flex-1 bg-surface-container-low/50 p-4 rounded-xl shadow-2xs border border-outline-variant/20">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-secondary">15:00</span>
-                  <span className="text-on-surface-variant font-medium">Maintained</span>
-                </div>
-                <p className="font-bold text-sm text-on-surface mt-1">Seine Architectural Cruise</p>
-                <p className="font-body-sm text-xs text-on-surface-variant">
-                  Pont Neuf Pier · Boarding passes preserved intact
-                </p>
-              </div>
-            </div>
-
-            {/* Stop 5 */}
-            <div className="relative flex items-start gap-4">
-              <div className="w-3.5 h-3.5 rounded-full bg-surface-container -ml-5 mt-1.5 z-10 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-secondary"></div>
-              </div>
-              <div className="flex-1 bg-surface-container-low/50 p-4 rounded-xl shadow-2xs border border-outline-variant/20">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-secondary">19:30</span>
-                  <span className="text-on-surface-variant font-medium">Maintained</span>
-                </div>
-                <p className="font-bold text-sm text-on-surface mt-1">Dinner at Le Christine</p>
-                <p className="font-body-sm text-xs text-on-surface-variant">
-                  Dinner reservations protected
-                </p>
-              </div>
-            </div>
+              );
+            })}
           </div>
 
           <div className="mt-auto pt-3 border-t border-outline-variant/20 flex items-center gap-1.5 text-on-surface-variant font-body-sm text-xs">
             <span className="material-symbols-outlined text-[16px] text-secondary">verified</span>
-            <span>Zero changes required for transportation tickets or dining bookings.</span>
+            <span>Zero changes required for subsequent tickets or dining reservations in {destinationName}.</span>
           </div>
         </div>
       </section>
@@ -357,7 +355,7 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
                 Change Summary
               </h3>
               <p className="font-body-sm text-xs text-on-surface-variant">
-                Key itinerary adjustments computed autonomously
+                Key itinerary adjustments computed autonomously for {destinationName}
               </p>
             </div>
           </div>
@@ -373,8 +371,8 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
             </span>
             <div>
               <p className="font-label-md text-xs font-bold text-on-surface">1 Activity Replaced</p>
-              <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-                Louvre Museum → Musée d'Orsay
+              <p className="font-body-sm text-xs text-on-surface-variant mt-0.5 line-clamp-1">
+                {disruptedName} → {replacementName}
               </p>
             </div>
           </div>
@@ -386,7 +384,7 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
             <div>
               <p className="font-label-md text-xs font-bold text-on-surface">No Conflicts Detected</p>
               <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-                All reservations aligned smoothly
+                All stops aligned smoothly in {destinationName}
               </p>
             </div>
           </div>
@@ -398,7 +396,7 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
             <div>
               <p className="font-label-md text-xs font-bold text-on-surface">Travel Time Checked</p>
               <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-                Walking reduced by 600m
+                Walking buffers preserved in {destinationName}
               </p>
             </div>
           </div>
@@ -410,7 +408,9 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
             <div>
               <p className="font-label-md text-xs font-bold text-on-surface">Budget Recalculated</p>
               <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-                {formatCost(300)} estimated savings
+                {costDelta <= 0
+                  ? `${formatCost(Math.abs(costDelta))} estimated savings`
+                  : `+${formatCost(costDelta)} budget adjustment`}
               </p>
             </div>
           </div>
@@ -433,7 +433,7 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
                 Zero Overlap
               </span>
               <p className="font-body-sm text-xs text-on-surface-variant mt-1">
-                Zero overlap, perfect walking pacing
+                Zero schedule overlap, comfortable pacing in {destinationName}
               </p>
             </div>
           </div>
@@ -448,10 +448,10 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
                 Transit
               </span>
               <span className="font-headline-sm text-lg font-bold text-on-surface mt-0.5">
-                600m Less Walking
+                {destinationName} Transit Aligned
               </span>
               <p className="font-body-sm text-xs text-on-surface-variant mt-1">
-                Walking reduced by 600m across river footbridge
+                Direct connections and realistic walking buffers across all stops
               </p>
             </div>
           </div>
@@ -466,10 +466,10 @@ export const ChangeSummary: React.FC<ChangeSummaryProps> = ({
                 Budget
               </span>
               <span className="font-headline-sm text-lg font-bold text-on-surface mt-0.5">
-                {formatCost(300)} Saved
+                {costDelta <= 0 ? `${formatCost(Math.abs(costDelta))} Saved` : `${formatCost(Math.abs(costDelta))} Adjusted`}
               </span>
               <p className="font-body-sm text-xs text-on-surface-variant mt-1">
-                Total Day 1 spend reduced from {formatCost(11300)} to {formatCost(11000)}
+                Total Day 1 spend adapted from {formatCost(originalDayCost)} to {formatCost(adaptedDayCost)}
               </p>
             </div>
           </div>

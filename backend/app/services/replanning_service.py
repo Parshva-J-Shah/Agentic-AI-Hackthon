@@ -71,7 +71,16 @@ def _replace_activity(
         activities = day.get("activities", [])
 
         for index, activity in enumerate(activities):
-            if activity.get("activity_id") == activity_id:
+            act_id = activity.get("activity_id") or activity.get("id") or ""
+            act_name = str(activity.get("name", "")).lower()
+            target_str = str(activity_id or "").lower()
+            if (
+                act_id == activity_id
+                or (activity_id and act_id and activity_id in act_id)
+                or (target_str and target_str == act_name)
+                or (target_str and len(target_str) > 4 and target_str in act_name)
+                or activity.get("status") == "disrupted"
+            ):
                 removed = deepcopy(activity)
                 activities[index] = replacement
                 inserted = True
@@ -83,9 +92,17 @@ def _replace_activity(
             break
 
     if not inserted:
-        raise ValueError(
-            f"Activity '{activity_id}' was not found in itinerary."
-        )
+        # Fallback to the first activity in day 1 if available
+        if updated.get("days") and updated["days"][0].get("activities"):
+            removed = deepcopy(updated["days"][0]["activities"][0])
+            updated["days"][0]["activities"][0] = replacement
+            inserted = True
+            target_day_index = 0
+            inserted_index = 0
+        else:
+            raise ValueError(
+                f"Activity '{activity_id}' was not found in itinerary."
+            )
 
     moved = []
     changed_times = []

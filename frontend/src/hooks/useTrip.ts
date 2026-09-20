@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Trip,
   TripConstraints,
+  Itinerary,
   Currency,
   Alternative,
   ChangeSummary,
@@ -33,8 +34,10 @@ export function useTrip() {
   const [currency, setCurrency] = useState<Currency>('INR');
   const [isDisrupted, setIsDisrupted] = useState<boolean>(false);
   const [isDisrupting, setIsDisrupting] = useState<boolean>(false);
-  const [alternatives, setAlternatives] = useState<Alternative[]>(MOCK_DISRUPTED_ALTERNATIVES);
-  const [changes, setChanges] = useState<ChangeSummary[]>(MOCK_REPLANNED_CHANGES);
+  const [alternatives, setAlternatives] = useState<Alternative[]>([]);
+  const [changes, setChanges] = useState<ChangeSummary[]>([]);
+  const [originalItinerary, setOriginalItinerary] = useState<Itinerary | null>(null);
+  const [selectedAlternative, setSelectedAlternative] = useState<Alternative | null>(null);
   const [chatMessages, setChatMessages] = useState<AgentMessage[]>(INITIAL_CHAT_MESSAGES);
   const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
   const [isFormSubmitting, setIsFormSubmitting] = useState<boolean>(false);
@@ -124,6 +127,10 @@ export function useTrip() {
       trip.itinerary?.days?.[0]?.activities?.find((a) => a.id === activityId) ||
       trip.itinerary?.days?.[0]?.activities?.[0];
 
+    if (trip?.itinerary) {
+      setOriginalItinerary(JSON.parse(JSON.stringify(trip.itinerary)));
+    }
+
     const targetId = activityId || targetAct?.id || 'act_001';
     const targetName = targetAct?.name || 'Scheduled Activity';
 
@@ -162,6 +169,8 @@ export function useTrip() {
   // Reset simulated disruption and return UI cleanly to original normal state
   const handleResetDisruption = async () => {
     setIsDisrupted(false);
+    setOriginalItinerary(null);
+    setSelectedAlternative(null);
     try {
       if (trip?.trip_id) {
         const cleanTrip = await api.getTrip(trip.trip_id);
@@ -206,6 +215,11 @@ export function useTrip() {
   // Apply chosen alternative
   const handleApplyAlternative = async (alternative: Alternative) => {
     try {
+      setSelectedAlternative(alternative);
+      if (!originalItinerary && trip?.itinerary) {
+        setOriginalItinerary(JSON.parse(JSON.stringify(trip.itinerary)));
+      }
+
       const targetActId =
         alternative.activity_id ||
         trip.itinerary?.days?.[0]?.activities?.find((a) => a.status === 'disrupted')?.id ||
@@ -215,8 +229,12 @@ export function useTrip() {
       const result = await api.applyAlternative(
         trip.trip_id,
         targetActId,
-        alternative.id
+        alternative.id,
+        alternative
       );
+      if (result.before_itinerary) {
+        setOriginalItinerary(result.before_itinerary);
+      }
       setChanges(result.changes);
       setTrip((prev) => ({
         ...prev,
@@ -296,6 +314,8 @@ export function useTrip() {
     isDisrupting,
     alternatives,
     changes,
+    originalItinerary,
+    selectedAlternative,
     chatMessages,
     isChatLoading,
     isFormSubmitting,

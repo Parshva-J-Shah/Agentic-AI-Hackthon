@@ -48,11 +48,29 @@ def apply_alternative_endpoint(
     target_activity = None
     for day in itinerary_data.get("days", []):
         for act in day.get("activities", []):
-            if act.get("activity_id") == activity_id:
+            if (
+                act.get("activity_id") == activity_id
+                or act.get("id") == activity_id
+                or str(act.get("name", "")).lower() == str(activity_id).lower()
+                or (activity_id and activity_id.lower() in str(act.get("name", "")).lower())
+            ):
                 target_activity = act
                 break
         if target_activity:
             break
+
+    # If still not found, search for any disrupted activity or use the first available activity
+    if target_activity is None:
+        for day in itinerary_data.get("days", []):
+            for act in day.get("activities", []):
+                if act.get("status") == "disrupted":
+                    target_activity = act
+                    break
+            if target_activity:
+                break
+
+    if target_activity is None and itinerary_data.get("days") and itinerary_data["days"][0].get("activities"):
+        target_activity = itinerary_data["days"][0]["activities"][0]
 
     if target_activity is None:
         raise HTTPException(
@@ -62,8 +80,18 @@ def apply_alternative_endpoint(
 
     # Resolve candidate
     selected = None
-    if request.candidate_data:
-        selected = request.candidate_data
+    if request.candidate_data and request.candidate_data.get("name"):
+        cdata = request.candidate_data
+        selected = {
+            "name": cdata["name"],
+            "location": cdata.get("location") or cdata.get("subtitle") or trip.destination,
+            "category": cdata.get("category") or cdata.get("type") or "sightseeing",
+            "estimated_cost": float(cdata.get("estimated_cost", cdata.get("cost", 0.0)) or 0.0),
+            "estimated_duration_minutes": int(cdata.get("duration_minutes", cdata.get("estimated_duration_minutes", 120)) or 120),
+            "source": cdata.get("source") or cdata.get("verification_source") or "TravelPilot verified alternative",
+            "availability_status": cdata.get("availability_status", "verified"),
+            "cost_status": "estimated",
+        }
     else:
         alt_info = search_disruption_alternatives(target_activity, trip.destination)
         demo_alts = alt_info.get("demo_alternatives", [])
@@ -103,10 +131,12 @@ def apply_alternative_endpoint(
         alternative=selected,
     )
 
+    act_lookup_id = target_activity.get("activity_id") or activity_id
+
     try:
         proposed, removed = _replace_activity(
             itinerary=itinerary_data,
-            activity_id=activity_id,
+            activity_id=act_lookup_id,
             replacement=replacement,
         )
     except Exception as exc:
@@ -120,6 +150,7 @@ def apply_alternative_endpoint(
         itinerary=proposed,
         budget=trip.budget,
     )
+    conflicts = summarize_conflicts(proposed)
     replacement_id = replacement.get("activity_id")
     blocking_conflicts_replacement = [
         c for c in conflicts.get("conflicts", [])

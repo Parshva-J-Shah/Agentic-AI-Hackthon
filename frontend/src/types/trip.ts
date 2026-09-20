@@ -194,6 +194,8 @@ export interface ApplyAlternativeResponse {
   changes: ChangeSummary[];
   itinerary: Itinerary;
   budget: Budget;
+  before_itinerary?: Itinerary;
+  selected_alternative?: any;
 }
 
 export interface ApiError {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useDynamicActivityImage, NEUTRAL_ACTIVITY_PLACEHOLDER } from '../utils/imageUtils';
 
 interface AgentLoadingProps {
   destination?: string;
@@ -11,6 +12,7 @@ export const AgentLoading: React.FC<AgentLoadingProps> = ({
   dates = 'Oct 12 – 16, 2026',
   onComplete,
 }) => {
+  const dynamicImage = useDynamicActivityImage(destination, undefined, undefined, destination);
   const [currentStepIndex, setCurrentStepIndex] = useState(2);
   const [progressPercent, setProgressPercent] = useState(20);
 
@@ -69,9 +71,12 @@ export const AgentLoading: React.FC<AgentLoadingProps> = ({
       <div className="w-full bg-surface-container-lowest rounded-3xl p-3 shadow-md border border-outline-variant/30 mb-8">
         <div className="relative w-full h-56 rounded-2xl overflow-hidden bg-surface-container">
           <img
-            src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=1000&q=80"
+            src={dynamicImage || NEUTRAL_ACTIVITY_PLACEHOLDER}
             alt={destination}
             className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = NEUTRAL_ACTIVITY_PLACEHOLDER;
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
 

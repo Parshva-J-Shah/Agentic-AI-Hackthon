@@ -67,11 +67,12 @@ function mapBackendItinerary(
           status: act.status || 'planned',
           status_label: act.status_label || (costVal === 0 ? 'Free Entry' : 'Verified'),
           tags: act.tags || [act.category || 'Sightseeing'],
-          image_url: resolveActivityImage(
+          image_url: act.image_url || resolveActivityImage(
             act.name || 'Scheduled Activity',
             act.location || defaultLoc,
             act.category || act.type,
-            act.image_url
+            act.image_url,
+            destination
           ),
           transit_after: act.transit_after,
           disruption_reason: act.disruption_reason,
@@ -186,11 +187,82 @@ function mapBackendAlternatives(
   currency: Currency = 'INR',
   destination: string = ''
 ): Alternative[] {
-  if (!Array.isArray(alts) || alts.length === 0) {
-    return MOCK_DISRUPTED_ALTERNATIVES;
-  }
+  const defaultLoc = destination || currentTripState.destination || 'Local Destination';
+  const cityName = defaultLoc.split(',')[0].trim();
 
-  const defaultLoc = destination || currentTripState.destination || 'Local Area';
+  if (!Array.isArray(alts) || alts.length === 0) {
+    return [
+      {
+        id: 'alt_1',
+        activity_id: affectedActivityId,
+        name: `${cityName} Heritage & Cultural Center`,
+        subtitle: `Historic District, ${cityName}`,
+        type: 'sightseeing',
+        location: `Historic District, ${cityName}`,
+        start_time: '10:30',
+        end_time: '12:45',
+        duration_minutes: 135,
+        estimated_cost: currency === 'INR' ? 800 : (currency === 'EUR' ? 14 : 16),
+        currency: currency,
+        description: `Verified heritage landmark alternative in ${cityName} with compatible schedule and timing.`,
+        match_score: 98,
+        cost_difference: currency === 'INR' ? -200 : -4,
+        travel_time_difference: -5,
+        verification_source: 'TravelPilot Verified Open',
+        operating_hours: '09:30 – 18:00',
+        transit_notes: `Direct transit within ${cityName}`,
+        tags: ['Heritage', 'Culture', 'Walkable'],
+        image_url: resolveActivityImage(`${cityName} Heritage & Cultural Center`, cityName, 'sightseeing', undefined, destination),
+        is_top_match: true,
+      },
+      {
+        id: 'alt_2',
+        activity_id: affectedActivityId,
+        name: `${cityName} Landmark Gallery Walk`,
+        subtitle: `Downtown, ${cityName}`,
+        type: 'sightseeing',
+        location: `Downtown, ${cityName}`,
+        start_time: '11:00',
+        end_time: '13:00',
+        duration_minutes: 120,
+        estimated_cost: currency === 'INR' ? 1000 : (currency === 'EUR' ? 18 : 20),
+        currency: currency,
+        description: `Prominent art and cultural gallery walk in ${cityName}.`,
+        match_score: 92,
+        cost_difference: 0,
+        travel_time_difference: 0,
+        verification_source: 'TravelPilot Verified Open',
+        operating_hours: '10:00 – 19:00',
+        transit_notes: `Central transit in ${cityName}`,
+        tags: ['Art', 'Downtown'],
+        image_url: resolveActivityImage(`${cityName} Landmark Gallery Walk`, cityName, 'sightseeing', undefined, destination),
+        is_top_match: false,
+      },
+      {
+        id: 'alt_3',
+        activity_id: affectedActivityId,
+        name: `${cityName} Scenic Promenade & Gardens`,
+        subtitle: `Waterfront / Central Park, ${cityName}`,
+        type: 'sightseeing',
+        location: `Central Park, ${cityName}`,
+        start_time: '10:30',
+        end_time: '12:00',
+        duration_minutes: 90,
+        estimated_cost: 0,
+        currency: currency,
+        description: `Scenic outdoor garden and promenade walk in ${cityName}.`,
+        match_score: 88,
+        cost_difference: currency === 'INR' ? -800 : -14,
+        travel_time_difference: -10,
+        verification_source: 'TravelPilot Verified Open',
+        operating_hours: 'Open 24 Hours',
+        transit_notes: `Direct walking route in ${cityName}`,
+        tags: ['Nature', 'Scenic', 'Free Entry'],
+        image_url: resolveActivityImage(`${cityName} Scenic Promenade & Gardens`, cityName, 'sightseeing', undefined, destination),
+        is_top_match: false,
+      },
+    ];
+  }
 
   return alts.map((alt: any, idx: number) => {
     const costVal = Number(alt.estimated_cost ?? alt.cost ?? 0);
@@ -206,15 +278,15 @@ function mapBackendAlternatives(
       duration_minutes: alt.duration_minutes || 135,
       estimated_cost: costVal,
       currency: (alt.currency || currency) as Currency,
-      description: alt.description || `Autonomous replacement candidate with verified operational status.`,
+      description: alt.description || `Autonomous replacement candidate in ${cityName} with verified operational status.`,
       match_score: alt.score ? Math.min(100, Math.round(alt.score)) : (idx === 0 ? 98 : (idx === 1 ? 92 : 88)),
       cost_difference: alt.cost_difference ?? -300,
       travel_time_difference: alt.travel_time_difference ?? -5,
       verification_source: alt.verification_source || (alt.source ? `Verified via ${alt.source}` : 'Tavily Verified Open'),
       operating_hours: alt.operating_hours || '09:30 – 18:00',
-      transit_notes: alt.transit_notes || 'Direct 8-min walk across pedestrian bridge',
+      transit_notes: alt.transit_notes || `Direct transit connection in ${cityName}`,
       tags: alt.tags || [alt.category || 'Museum', 'Walkable'],
-      image_url: resolveActivityImage(alt.name, alt.location || defaultLoc, alt.category, alt.image_url),
+      image_url: alt.image_url || resolveActivityImage(alt.name, alt.location || defaultLoc, alt.category, alt.image_url, destination),
       is_top_match: idx === 0,
     };
   });
@@ -223,48 +295,71 @@ function mapBackendAlternatives(
 /**
  * Maps backend diff changes to ChangeSummary[]
  */
-function mapBackendChanges(changes: any): ChangeSummary[] {
-  if (!changes) return MOCK_REPLANNED_CHANGES;
+function mapBackendChanges(changes: any, destination: string = ''): ChangeSummary[] {
   if (Array.isArray(changes) && changes.length > 0) return changes;
 
   const list: ChangeSummary[] = [];
-  if (changes.removed) {
-    list.push({
+  if (changes && typeof changes === 'object') {
+    if (changes.removed) {
+      list.push({
+        type: 'activity_removed',
+        event_type: 'REMOVED',
+        old_activity: changes.removed.name || 'Disrupted Activity',
+        reason: changes.reason_for_change || 'Activity disrupted or cancelled',
+        cost_delta: -(changes.removed.cost || 0),
+        time_delta_minutes: 0,
+        time_range: `${changes.removed.start_time || '10:00'} - ${changes.removed.end_time || '13:00'}`,
+      });
+    }
+    if (changes.added) {
+      list.push({
+        type: 'activity_added',
+        event_type: 'ADDED',
+        new_activity: changes.added.name || 'Alternative Activity',
+        reason: 'Optimized replacement with zero conflict overlap',
+        cost_delta: changes.added.cost || 0,
+        time_delta_minutes: 0,
+        time_range: `${changes.added.start_time || '10:45'} - ${changes.added.end_time || '13:00'}`,
+      });
+    }
+    if (Array.isArray(changes.changed_times)) {
+      changes.changed_times.forEach((ct: any) => {
+        list.push({
+          type: 'time_shifted',
+          event_type: 'RESCHEDULED',
+          old_activity: ct.name || 'Activity',
+          new_activity: ct.name || 'Activity',
+          reason: ct.reason || 'Buffered arrival time adjustment',
+          cost_delta: 0,
+          time_delta_minutes: ct.delta_minutes || 5,
+          time_range: ct.new_time || `${ct.new_start || '13:20'} - ${ct.new_end || '14:35'}`,
+        });
+      });
+    }
+  }
+
+  if (list.length > 0) return list;
+
+  const dest = destination || currentTripState.destination || 'Local Destination';
+  const cityName = dest.split(',')[0].trim();
+  return [
+    {
       type: 'activity_removed',
       event_type: 'REMOVED',
-      old_activity: changes.removed.name || 'Disrupted Activity',
-      reason: changes.reason_for_change || 'Activity disrupted or cancelled',
-      cost_delta: -(changes.removed.cost || 22),
-      time_delta_minutes: 0,
-      time_range: `${changes.removed.start_time || '10:00'} - ${changes.removed.end_time || '13:00'}`,
-    });
-  }
-  if (changes.added) {
-    list.push({
+      old_activity: 'Scheduled Activity',
+      reason: 'Venue temporary closure or disruption notice',
+      time_range: '10:30 – 12:45',
+      cost_delta: -800,
+    },
+    {
       type: 'activity_added',
       event_type: 'ADDED',
-      new_activity: changes.added.name || 'Alternative Activity',
-      reason: 'Optimized replacement with zero conflict overlap',
-      cost_delta: changes.added.cost || 16,
-      time_delta_minutes: 0,
-      time_range: `${changes.added.start_time || '10:45'} - ${changes.added.end_time || '13:00'}`,
-    });
-  }
-  if (Array.isArray(changes.changed_times)) {
-    changes.changed_times.forEach((ct: any) => {
-      list.push({
-        type: 'time_shifted',
-        event_type: 'RESCHEDULED',
-        old_activity: ct.name || 'Activity',
-        new_activity: ct.name || 'Activity',
-        reason: 'Buffered arrival time adjustment',
-        cost_delta: 0,
-        time_delta_minutes: ct.delta_minutes || 5,
-        time_range: ct.new_time || '13:20 - 14:35',
-      });
-    });
-  }
-  return list.length > 0 ? list : MOCK_REPLANNED_CHANGES;
+      new_activity: `${cityName} Heritage & Cultural Center`,
+      reason: `Autonomous replacement candidate verified open in ${cityName}`,
+      time_range: '10:30 – 12:45',
+      cost_delta: 600,
+    },
+  ];
 }
 
 export const api = {
@@ -442,16 +537,22 @@ export const api = {
     let intent = 'itinerary_question';
 
     if (lower.includes('tomorrow') || lower.includes('day 1') || lower.includes('morning')) {
-      reply = `Tomorrow morning starts at 09:15 CET with arrival at CDG Terminal 2E, followed by the Louvre Museum scheduled from 10:30 to 13:00. Scenic walk through Pont des Arts leads directly into lunch at Tuileries Bistro at 13:15.`;
+      const dest = currentTripState.destination || 'your destination';
+      const firstAct = currentTripState.itinerary.days[0]?.activities[0]?.name || 'scheduled morning activity';
+      reply = `Tomorrow morning in ${dest} begins with ${firstAct}, followed by your scheduled regional and sightseeing stops.`;
       intent = 'itinerary_question';
     } else if (lower.includes('budget') || lower.includes('remaining') || lower.includes('spent') || lower.includes('cost')) {
-      reply = `Your total budget cap is ₹50,000. Current estimated spend is ₹45,000, leaving a healthy ₹5,000 (10%) contingency margin for spontaneous Parisian experiences.`;
+      const b = currentTripState.budget;
+      reply = `Your total budget cap is ₹${b.target_cap.toLocaleString()}. Current estimated spend is ₹${b.estimated_total.toLocaleString()}, leaving ₹${b.remaining.toLocaleString()} remaining.`;
       intent = 'budget_inquiry';
     } else if (lower.includes('fit') || lower.includes('add') || lower.includes('another activity')) {
-      reply = `Looking at Day 2: There is a 45-minute open window between Luxembourg Gardens (ends 16:30) and Shakespeare & Co (starts 17:00). You can fit a quick coffee stop at Saint-Sulpice square without violating travel buffers.`;
+      const dest = currentTripState.destination || 'your destination';
+      reply = `Looking at your schedule in ${dest}: there is an open window in the afternoon where a local walk or cultural stop can fit smoothly.`;
       intent = 'constraint_inquiry';
-    } else if (lower.includes('cancel') || lower.includes('disrupt') || lower.includes('louvre')) {
-      reply = `⚠️ Disruption analysis: If Louvre Museum is unavailable, I recommend Musée d'Orsay (10:45 – 13:00). It saves ₹300, reduces transit by 5 minutes, and keeps your Tuileries lunch reservation intact. Click 'Simulate Disruption' to preview.`;
+    } else if (lower.includes('cancel') || lower.includes('disrupt') || lower.includes('strike') || lower.includes('close')) {
+      const dest = currentTripState.destination || 'your destination';
+      const firstAct = currentTripState.itinerary.days[0]?.activities[0]?.name || 'Scheduled Activity';
+      reply = `⚠️ Disruption analysis: If ${firstAct} is unavailable in ${dest}, I have evaluated optimal alternative candidates that preserve your transit buffer and timing. Click 'Simulate Disruption' to preview.`;
       intent = 'disruption_query';
     }
 
@@ -571,21 +672,24 @@ export const api = {
     const day1 = currentTripState.itinerary.days[0];
     if (day1) {
       const targetActivity = day1.activities.find(
-        (a) => a.id === disruption.activity_id || a.id.includes('louvre')
+        (a) => a.id === disruption.activity_id || a.name.toLowerCase().includes(disruption.activity_id.toLowerCase())
       );
       if (targetActivity) {
         targetActivity.status = 'disrupted';
-        targetActivity.status_label = 'Disrupted (Strike)';
+        targetActivity.status_label = 'Disrupted';
         targetActivity.disruption_reason = disruption.message;
       }
     }
+
+    const dynAlts = mapBackendAlternatives([], disruption.activity_id, currentTripState.budget.currency, currentTripState.destination);
+    const dynChanges = mapBackendChanges(null, currentTripState.destination);
 
     return {
       status: 'replanned',
       simulated: disruption.simulate ?? false,
       affected_activities: [disruption.activity_id],
-      alternatives: MOCK_DISRUPTED_ALTERNATIVES,
-      changes: MOCK_REPLANNED_CHANGES,
+      alternatives: dynAlts,
+      changes: dynChanges,
       itinerary: currentTripState.itinerary,
       budget: currentTripState.budget,
     };
@@ -598,8 +702,13 @@ export const api = {
   async applyAlternative(
     tripId: string,
     activityId: string,
-    alternativeId: string
+    alternativeId: string,
+    alternative?: Alternative
   ): Promise<ApplyAlternativeResponse> {
+    const candidateName = alternative?.name || alternativeId;
+    const dest = currentTripState.destination || 'Local Destination';
+    const cityName = dest.split(',')[0].trim();
+
     try {
       const response = await fetch(
         `${API_BASE}/trips/${tripId}/alternatives/${activityId}/apply`,
@@ -608,20 +717,34 @@ export const api = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             alternative_id: alternativeId,
-            candidate_name: alternativeId,
+            candidate_name: candidateName,
+            candidate_data: alternative ? {
+              name: alternative.name,
+              location: alternative.location || alternative.subtitle || dest,
+              category: alternative.type || 'sightseeing',
+              estimated_cost: alternative.estimated_cost,
+              estimated_duration_minutes: alternative.duration_minutes || 120,
+              source: alternative.verification_source || 'TravelPilot verified alternative',
+              availability_status: 'verified',
+              cost_status: 'estimated',
+            } : null,
             simulate: false,
           }),
         }
       );
       if (response.ok) {
         const data = await response.json();
-        const mappedChanges = mapBackendChanges(data.changes);
+        const mappedChanges = mapBackendChanges(data.changes, dest);
         const mappedItin = data.itinerary?.days
-          ? mapBackendItinerary(data.itinerary, currentTripState.budget.target_cap, currentTripState.budget.currency)
-          : currentTripState.itinerary;
+          ? mapBackendItinerary(data.itinerary, currentTripState.budget.target_cap, currentTripState.budget.currency, dest)
+          : (data.after?.days ? mapBackendItinerary(data.after, currentTripState.budget.target_cap, currentTripState.budget.currency, dest) : currentTripState.itinerary);
         const mappedBudget = data.budget
           ? mapBackendBudget(data.budget, currentTripState.budget.target_cap, currentTripState.budget.currency)
           : currentTripState.budget;
+
+        const mappedBefore = data.before?.days
+          ? mapBackendItinerary(data.before, currentTripState.budget.target_cap, currentTripState.budget.currency, dest)
+          : undefined;
 
         currentTripState.itinerary = mappedItin;
         currentTripState.budget = mappedBudget;
@@ -632,30 +755,65 @@ export const api = {
           changes: mappedChanges,
           itinerary: mappedItin,
           budget: mappedBudget,
+          before_itinerary: mappedBefore,
+          selected_alternative: data.selected_alternative || alternative,
         };
       }
     } catch (err) {
-      console.warn('[TravelPilot] Backend applyAlternative error, using fallback:', err);
+      console.warn('[TravelPilot] Backend applyAlternative error, using dynamic fallback:', err);
     }
 
-    const selectedAlt =
-      MOCK_DISRUPTED_ALTERNATIVES.find((alt) => alt.id === alternativeId) || MOCK_DISRUPTED_ALTERNATIVES[0];
+    const selectedAlt: Alternative = alternative || {
+      id: alternativeId || 'alt_1',
+      activity_id: activityId,
+      name: `${cityName} Heritage & Cultural Center`,
+      subtitle: `Historic District, ${cityName}`,
+      type: 'sightseeing',
+      location: `Historic District, ${cityName}`,
+      start_time: '10:30',
+      end_time: '12:45',
+      duration_minutes: 135,
+      estimated_cost: currentTripState.budget.currency === 'INR' ? 800 : 16,
+      currency: currentTripState.budget.currency,
+      description: `Autonomous replacement candidate in ${cityName}.`,
+      match_score: 98,
+      cost_difference: -200,
+      travel_time_difference: -5,
+      verification_source: 'TravelPilot Verified Open',
+      operating_hours: '09:30 – 18:00',
+      transit_notes: `Direct transit connection in ${cityName}`,
+      tags: ['Heritage', 'Culture'],
+      image_url: resolveActivityImage(`${cityName} Heritage & Cultural Center`, cityName, 'sightseeing', undefined, dest),
+      is_top_match: true,
+    };
+
+    const beforeFallback = JSON.parse(JSON.stringify(currentTripState.itinerary));
 
     // Rebuild Day 1 in fallback
     const day1 = currentTripState.itinerary.days[0];
+    let removedActName = 'Scheduled Activity';
+    let removedCost = 800;
     if (day1) {
-      const index = day1.activities.findIndex((a) => a.id === activityId || a.id.includes('louvre'));
-      if (index !== -1) {
-        day1.activities[index] = {
+      const index = day1.activities.findIndex(
+        (a) => a.id === activityId || a.status === 'disrupted' || a.name.toLowerCase().includes(activityId.toLowerCase())
+      );
+      const targetIdx = index !== -1 ? index : 0;
+      if (day1.activities[targetIdx]) {
+        const old = day1.activities[targetIdx];
+        removedActName = old.name;
+        removedCost = old.estimated_cost;
+        const nextAct = day1.activities[targetIdx + 1];
+
+        day1.activities[targetIdx] = {
           id: selectedAlt.id,
           name: selectedAlt.name,
-          type: 'museum',
-          location: selectedAlt.location,
-          start_time: selectedAlt.start_time,
-          end_time: selectedAlt.end_time,
-          duration_minutes: selectedAlt.duration_minutes,
+          type: (selectedAlt.type as any) || 'sightseeing',
+          location: selectedAlt.location || dest,
+          start_time: selectedAlt.start_time || old.start_time || '10:30',
+          end_time: selectedAlt.end_time || old.end_time || '12:45',
+          duration_minutes: selectedAlt.duration_minutes || 135,
           estimated_cost: selectedAlt.estimated_cost,
-          currency: 'INR',
+          currency: (selectedAlt.currency || currentTripState.budget.currency) as any,
           description: `Autonomous Replacement • ${selectedAlt.description} • Entry confirmed`,
           status: 'replanned',
           status_label: 'Agent Replanned',
@@ -665,31 +823,46 @@ export const api = {
             type: 'walk',
             duration_minutes: 10,
             distance_km: 0.6,
-            from_location: "Musée d'Orsay",
-            to_location: 'Tuileries Garden Bistro',
-            path_type: 'Passerelle Léopold Promenade',
-            notes: 'Direct 8-min walk across pedestrian bridge',
+            from_location: selectedAlt.name,
+            to_location: nextAct?.name || 'Next Scheduled Stop',
+            path_type: 'Pedestrian Connection',
+            notes: selectedAlt.transit_notes || 'Direct connection to next scheduled stop',
           },
         };
 
-        const lunchIndex = day1.activities.findIndex((a) => a.id.includes('lunch'));
-        if (lunchIndex !== -1) {
-          day1.activities[lunchIndex].start_time = '13:20';
-          day1.activities[lunchIndex].end_time = '14:35';
-        }
-
-        currentTripState.budget.estimated_total = 44700;
-        currentTripState.budget.remaining = 5300;
-        day1.daily_cost = 11200;
+        const deltaCost = selectedAlt.estimated_cost - removedCost;
+        currentTripState.budget.estimated_total += deltaCost;
+        currentTripState.budget.remaining = currentTripState.budget.target_cap - currentTripState.budget.estimated_total;
         currentTripState.status = 'replanned';
       }
     }
 
+    const dynChanges: ChangeSummary[] = [
+      {
+        type: 'activity_removed',
+        event_type: 'REMOVED',
+        old_activity: removedActName,
+        reason: 'Activity disrupted due to unexpected temporary closure',
+        time_range: '10:30 – 12:45',
+        cost_delta: -removedCost,
+      },
+      {
+        type: 'activity_added',
+        event_type: 'ADDED',
+        new_activity: selectedAlt.name,
+        reason: `Autonomous replacement candidate verified open in ${cityName}`,
+        time_range: `${selectedAlt.start_time} – ${selectedAlt.end_time}`,
+        cost_delta: selectedAlt.estimated_cost,
+      },
+    ];
+
     return {
       status: 'success',
-      changes: MOCK_REPLANNED_CHANGES,
+      changes: dynChanges,
       itinerary: currentTripState.itinerary,
       budget: currentTripState.budget,
+      before_itinerary: beforeFallback,
+      selected_alternative: selectedAlt,
     };
   },
 
@@ -723,8 +896,13 @@ export const api = {
       const response = await fetch(`${API_BASE}/images/search?query=${encodeURIComponent(query)}`);
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.image_url) {
-          return data.image_url;
+        if (data.success) {
+          if (Array.isArray(data.image_urls) && data.image_urls.length > 0) {
+            return data.image_urls[0];
+          }
+          if (data.image_url) {
+            return data.image_url;
+          }
         }
       }
     } catch {

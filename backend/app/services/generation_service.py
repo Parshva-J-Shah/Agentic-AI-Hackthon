@@ -143,7 +143,7 @@ def _build_curated_itinerary(trip) -> Itinerary:
     num_days = len(dates)
 
     # Match template by city
-    template_key = "paris"
+    template_key = None
     if "mumbai" in destination_lower or "bombay" in destination_lower:
         template_key = "mumbai"
     elif "rome" in destination_lower or "roma" in destination_lower:
@@ -155,7 +155,140 @@ def _build_curated_itinerary(trip) -> Itinerary:
     elif "paris" in destination_lower:
         template_key = "paris"
 
-    template_days = DESTINATION_TEMPLATES.get(template_key, DESTINATION_TEMPLATES["paris"])
+    if template_key and template_key in DESTINATION_TEMPLATES:
+        template_days = DESTINATION_TEMPLATES[template_key]
+    else:
+        # Dynamically build destination-specific days for ANY destination
+        dest = trip.destination.strip()
+        city = dest.split(",")[0].strip()
+        template_days = [
+            [
+                {
+                    "name": f"{city} Historic Landmark & Heritage Walk",
+                    "location": f"Historic Old Quarter, {dest}",
+                    "category": "history",
+                    "start_time": "09:30",
+                    "end_time": "12:00",
+                    "cost_eur": 12.0,
+                    "cost_usd": 15.0,
+                    "cost_inr": 400.0,
+                },
+                {
+                    "name": f"Traditional Lunch & Local Flavors in {city}",
+                    "location": f"Central District, {dest}",
+                    "category": "food",
+                    "start_time": "12:30",
+                    "end_time": "14:00",
+                    "cost_eur": 18.0,
+                    "cost_usd": 20.0,
+                    "cost_inr": 600.0,
+                },
+                {
+                    "name": f"{city} Cultural Center & Art Museum",
+                    "location": f"Museum Precinct, {dest}",
+                    "category": "culture",
+                    "start_time": "14:30",
+                    "end_time": "17:00",
+                    "cost_eur": 10.0,
+                    "cost_usd": 12.0,
+                    "cost_inr": 350.0,
+                },
+                {
+                    "name": f"Sunset Viewpoint & Scenic Promenade",
+                    "location": f"Scenic Waterfront / Hillside, {dest}",
+                    "category": "sightseeing",
+                    "start_time": "17:30",
+                    "end_time": "19:00",
+                    "cost_eur": 0.0,
+                    "cost_usd": 0.0,
+                    "cost_inr": 0.0,
+                },
+            ],
+            [
+                {
+                    "name": f"{city} Botanical Gardens & Royal Grounds",
+                    "location": f"Garden Quarter, {dest}",
+                    "category": "nature",
+                    "start_time": "09:30",
+                    "end_time": "12:00",
+                    "cost_eur": 8.0,
+                    "cost_usd": 10.0,
+                    "cost_inr": 250.0,
+                },
+                {
+                    "name": f"Regional Cuisine Lunch at Heritage Quarter",
+                    "location": f"Old Town, {dest}",
+                    "category": "food",
+                    "start_time": "12:30",
+                    "end_time": "14:00",
+                    "cost_eur": 15.0,
+                    "cost_usd": 18.0,
+                    "cost_inr": 500.0,
+                },
+                {
+                    "name": f"{city} Architectural Monument & Palace",
+                    "location": f"Heritage Boulevard, {dest}",
+                    "category": "history",
+                    "start_time": "14:30",
+                    "end_time": "17:00",
+                    "cost_eur": 12.0,
+                    "cost_usd": 15.0,
+                    "cost_inr": 400.0,
+                },
+                {
+                    "name": f"Evening Artisan Bazaar & Street Walk",
+                    "location": f"Central Bazaar, {dest}",
+                    "category": "leisure",
+                    "start_time": "17:30",
+                    "end_time": "19:00",
+                    "cost_eur": 0.0,
+                    "cost_usd": 0.0,
+                    "cost_inr": 0.0,
+                },
+            ],
+            [
+                {
+                    "name": f"{city} Discovery Trail & City Plaza",
+                    "location": f"Civic Square, {dest}",
+                    "category": "sightseeing",
+                    "start_time": "09:30",
+                    "end_time": "12:00",
+                    "cost_eur": 6.0,
+                    "cost_usd": 8.0,
+                    "cost_inr": 200.0,
+                },
+                {
+                    "name": f"Celebration Dining & Local Specialty",
+                    "location": f"Downtown Plaza, {dest}",
+                    "category": "food",
+                    "start_time": "12:30",
+                    "end_time": "14:00",
+                    "cost_eur": 22.0,
+                    "cost_usd": 25.0,
+                    "cost_inr": 800.0,
+                },
+                {
+                    "name": f"{city} Crafts & Heritage Memorial",
+                    "location": f"Arts District, {dest}",
+                    "category": "culture",
+                    "start_time": "14:30",
+                    "end_time": "17:00",
+                    "cost_eur": 10.0,
+                    "cost_usd": 12.0,
+                    "cost_inr": 300.0,
+                },
+                {
+                    "name": f"Twilight Panoramic Overlook",
+                    "location": f"Skyline Vista, {dest}",
+                    "category": "sightseeing",
+                    "start_time": "17:30",
+                    "end_time": "19:00",
+                    "cost_eur": 0.0,
+                    "cost_usd": 0.0,
+                    "cost_inr": 0.0,
+                },
+            ],
+        ]
     days: list[ItineraryDay] = []
 
     for day_idx, date_str in enumerate(dates):
