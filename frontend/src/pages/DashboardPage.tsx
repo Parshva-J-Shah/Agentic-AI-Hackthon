@@ -21,6 +21,81 @@ interface DashboardPageProps {
   isDisrupting?: boolean;
 }
 
+function getDestinationWeather(destination: string): { weatherInfo: string; weatherNote: string } {
+  const dest = (destination || 'Destination').trim();
+
+  // Deterministic hash based on destination string
+  let hash = 2166136261;
+  for (let i = 0; i < dest.length; i++) {
+    hash ^= dest.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const seed = Math.abs(hash);
+
+  // Deterministic temperature range (16°C to 34°C)
+  const d = dest.toLowerCase();
+  let baseTemp = 18 + (seed % 14);
+
+  if (
+    d.includes('beach') ||
+    d.includes('island') ||
+    d.includes('coast') ||
+    d.includes('tropical') ||
+    d.includes('resort') ||
+    d.includes('bay') ||
+    d.includes('goa') ||
+    d.includes('miami') ||
+    d.includes('cancun')
+  ) {
+    baseTemp = 28 + (seed % 5);
+  } else if (
+    d.includes('mountain') ||
+    d.includes('alps') ||
+    d.includes('hill') ||
+    d.includes('peak') ||
+    d.includes('snow') ||
+    d.includes('lake')
+  ) {
+    baseTemp = 12 + (seed % 8);
+  } else if (
+    d.includes('desert') ||
+    d.includes('oasis') ||
+    d.includes('dune')
+  ) {
+    baseTemp = 30 + (seed % 6);
+  }
+
+  let condition = 'Mild / Clear';
+  let note = 'Pleasant for walking · Comfortable attire recommended';
+
+  if (baseTemp >= 30) {
+    const conditions = ['Sunny / Warm', 'Clear Skies / Warm', 'Sunny & Bright', 'Dry & Warm'];
+    condition = conditions[seed % conditions.length];
+    note = 'Stay hydrated · Sun protection & light attire recommended';
+  } else if (baseTemp >= 26) {
+    const conditions = ['Warm / Pleasant', 'Sunny / Mild Breeze', 'Clear & Sunny', 'Breezy / Warm'];
+    condition = conditions[seed % conditions.length];
+    note = 'Ideal for outdoor exploration · Light layer recommended';
+  } else if (baseTemp >= 21) {
+    const conditions = ['Mild / Clear', 'Partly Cloudy / Fair', 'Pleasant / Breezy', 'Fair & Sunny'];
+    condition = conditions[seed % conditions.length];
+    note = 'Optimal walking temperature · Light jacket for evenings';
+  } else if (baseTemp >= 16) {
+    const conditions = ['Cool / Clear', 'Brisk & Sunny', 'Crisp / Fair', 'Mild / Breezy'];
+    condition = conditions[seed % conditions.length];
+    note = 'Comfortable for active walking · Light sweater recommended';
+  } else {
+    const conditions = ['Cool / Crisp', 'Chilly / Clear', 'Brisk Air / Clear', 'Overcast / Cool'];
+    condition = conditions[seed % conditions.length];
+    note = 'Brisk climate · Warm layers & jacket recommended';
+  }
+
+  return {
+    weatherInfo: `${baseTemp}°C · ${condition}`,
+    weatherNote: note,
+  };
+}
+
 export const DashboardPage: React.FC<DashboardPageProps> = ({
   trip,
   currency,
@@ -54,9 +129,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const hotelAddr = trip.accommodation?.address || `Central District, ${trip.destination}`;
   const transitPass = `${trip.destination.split(',')[0]} Transit Card`;
   const transitNote = `Suggested for convenient travel in ${trip.destination.split(',')[0]}`;
-  const isTropical = trip.destination.toLowerCase().includes('mumbai') || trip.destination.toLowerCase().includes('india');
-  const weatherInfo = isTropical ? '28°C · Tropical / Warm' : '20°C · Mild / Clear';
-  const weatherNote = isTropical ? 'Pleasant for coastal walks · Light attire recommended' : 'Pleasant for walking · Light layer recommended';
+  const { weatherInfo, weatherNote } = getDestinationWeather(trip.destination);
 
   return (
     <div className="w-full max-w-[1320px] mx-auto px-margin-mobile md:px-margin py-8 space-y-8">
